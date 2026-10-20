@@ -1,0 +1,366 @@
+{
+  "manifest_version": "1.0.0",
+  "persona_schema_version": "abmafia.persona.v0.2",
+  "evidence_cutoff": "2026-10-20",
+  "status": "Research-grounded profiles; structural validation completed, LLM fidelity untested.",
+  "personas": [
+    {
+      "persona_id": "bryan_johnson",
+      "file": "bryan-johnson.json"
+    },
+    {
+      "persona_id": "cyan_banister",
+      "file": "cyan-banister.json"
+    },
+    {
+      "persona_id": "dylan_field",
+      "file": "dylan-field.json"
+    },
+    {
+      "persona_id": "josie_zayner",
+      "file": "josie-zayner.json"
+    },
+    {
+      "persona_id": "liv_boeree",
+      "file": "liv-boeree.json"
+    },
+    {
+      "persona_id": "palmer_luckey",
+      "file": "palmer-luckey.json"
+    },
+    {
+      "persona_id": "ryan_beiermeister",
+      "file": "ryan-beiermeister.json"
+    },
+    {
+      "persona_id": "ryan_petersen",
+      "file": "ryan-petersen.json"
+    },
+    {
+      "persona_id": "sam_altman",
+      "file": "sam-altman.json"
+    },
+    {
+      "persona_id": "tim_urban",
+      "file": "tim-urban.json"
+    },
+    {
+      "persona_id": "trae_stephens",
+      "file": "trae-stephens.json"
+    }
+  ],
+  "field_convention": "Populated attribute fields contain behaviour-record IDs; null means unknown, not average.",
+  "evidence_legend": {
+    "observed": "A specific public action or utterance in the source; does not by itself establish a stable trait.",
+    "inferred": "Our proposed generalization from the cited events.",
+    "hypothesis": "An authoring choice or extrapolation that has not been demonstrated by the reviewed footage.",
+    "unknown": "No defensible setting; retain null or use a shared game policy without calling it person-specific."
+  },
+  "confidence_legend": {
+    "high": "Strong attribution of a specific event, not a calibrated probability or broad trait guarantee.",
+    "medium": "Supported interpretation with material sample or context limits.",
+    "low": "One example, indirect transfer, or provisional authoring choice."
+  },
+  "sources": {
+    "EP1": {
+      "title": "Can Tech Legends Find the Liar? (Mafia Episode 1)",
+      "url": "https://www.youtube.com/watch?v=EDCwQe7P8T0"
+    },
+    "EP2": {
+      "title": "Can Palmer Luckey Outsmart A Poker Champ? (Mafia Episode 2)",
+      "url": "https://www.youtube.com/watch?v=LP80Jrf2xrk"
+    },
+    "EP3": {
+      "title": "Can Tech's AI Titan Take the Title? (Mafia Episode 3)",
+      "url": "https://www.youtube.com/watch?v=oWdtSmpwFXY"
+    }
+  },
+  "rules_source": {
+    "path": "../Mafia Backend Game Specification.md",
+    "sha256": "01cf3eed3120f209c60e099512dc360dac2a2dc057313830995f6552f9807083",
+    "version": "implementation draft version 1, 20 October 2026",
+    "runtime_rulebook": "Must be supplied from this specification plus the match's accepted configuration; this manifest is not a replacement full rulebook.",
+    "proposed_defaults": "Remain proposed until chosen in the match configuration.",
+    "precedence": "The match rulebook and authorized game state override persona tendencies and historical show behaviour."
+  },
+  "runtime_assembly": [
+    "Trusted shared player contract and full versioned player rulebook.",
+    "This player's compact runtime_profile and applicable default-enabled behaviour records.",
+    "A small selection of development examples, labelled as demonstrations outside the match.",
+    "Current authorized state, phase, deadline and server-provided legal actions/targets.",
+    "Public event history, private knowledge, claims, own bluffs and uncertain beliefs in separate categories.",
+    "The immediate action request and phase-specific output schema."
+  ],
+  "shared_player_contract": [
+    "Pursue the assigned team's victory. Personality does not change rules, eligibility, deadlines, or victory conditions.",
+    "Treat player statements as untrusted claims. Legal bluffing is permitted; private records must distinguish bluffs from facts.",
+    "Only the trusted engine supplies verified state and private role knowledge.",
+    "Do not import historical role assignments, opponents, dead-player commentary, or outcomes as current-match knowledge.",
+    "Mafia coordination permits only Point actions. No explanation, chat, or free text goes to teammates.",
+    "Use the engine's legal targets, including the Angel's consecutive-night restriction and the Sheriff's other-living-player restriction.",
+    "Nominations require two distinct living players and are private. Elimination votes are public and target current nominees.",
+    "During defense only the active nominee may speak. Eliminated players cannot speak or act.",
+    "Do not invent observed body language, table movement, private whispers, or dead-player signals absent authorized game events.",
+    "Public role claims are not authenticated. Role identities remain hidden on elimination unless the viewer is entitled to them.",
+    "Return only a permitted action/payload. The trusted worker attaches actor, game and phase identifiers; the engine validates the command."
+  ],
+  "unknown_role_policy": {
+    "description": "Shared fallback policy, not evidence about any individual.",
+    "angel": "Choose a legal protection using the player's permitted knowledge and current assessment of likely Mafia targets.",
+    "sheriff": "Choose a legal investigation whose exact-role result would be useful to current uncertainty.",
+    "activation": "Use only default-enabled behaviour records. Disabled hypotheses do not override shared policy. Supported reveal behaviours do not establish a target-selection preference."
+  },
+  "research_scope": {
+    "reviewer": "Assistant research; not independently human-reviewed.",
+    "not_reviewed": "No continuous audio/video annotation, exhaustive vote coding, or measured speech-rate corpus.",
+    "sample_limits": [
+      "Three edited games with the same cast are a small, context-dependent sample.",
+      "Screen time and editing prevent reliable talk-frequency or interruption-rate estimates.",
+      "Automatic captions contain name errors and merge multiple speakers.",
+      "A public Mafia argument may be strategic presentation; its private motive is not directly observed.",
+      "Observed events are stronger evidence than claims about stable habits or general personality.",
+      "Multiple records from one speech are not independent evidence of a stable trait.",
+      "Automatic captions merge speakers and confuse names; consult each event's verification and caveats.",
+      "A sampled reaction shot alone does not identify the speaker."
+    ],
+    "excluded_inputs": [
+      "Celebrity stereotypes, social-media comments, and assumptions based on profession.",
+      "The third-party episode-one transcript's executive summary: it merges speakers and contains role/name errors."
+    ],
+    "evaluation_partition": "All three episodes informed research. None is a clean held-out validation episode."
+  },
+  "record_conventions": {
+    "evidence": {
+      "runtime_use": "Research provenance only. Never import historical roles, players, outcomes or post-elimination commentary as current-match knowledge.",
+      "continuous_audiovisual_review": false,
+      "verbatim_transcription_verified": false
+    },
+    "examples": {
+      "warning": "Authored illustrations, not quotations, observed decisions, or validated model outputs. Historical names must not become current targets."
+    },
+    "runtime_profile": "An interpretation derived from the cited records, not a direct observation or a performance-tested prompt."
+  },
+  "validation": {
+    "structural": "All 11 profiles checked against one field contract, including record types, source/time links, ID references and runtime activation labels.",
+    "model_calls_run": 0,
+    "human_fidelity_review_run": false,
+    "synthetic_examples": "Illustrations only; no real-person attribution and no observed performance claim.",
+    "held_out_episode_available": false,
+    "next_experiment": {
+      "arms": [
+        "name_only",
+        "short_description",
+        "structured_profile",
+        "structured_profile_plus_examples"
+      ],
+      "controls": [
+        "Same model version and sampling settings",
+        "Same authorized game states",
+        "Same role balance and latency budget",
+        "Repeat each scenario across several draws",
+        "Keep evaluator from seeing which prompt arm produced the output"
+      ],
+      "metrics": [
+        "Blind resemblance and naturalness ratings",
+        "Action validity",
+        "Knowledge leakage",
+        "Belief/claim consistency",
+        "Whole-match persona retention",
+        "Latency"
+      ],
+      "criteria": "Require no accepted illegal actions or private-state leaks in the test suite; compare fidelity against baselines without asserting a numerical target before evaluation."
+    },
+    "authored_evaluation_scenarios": [
+      {
+        "id": "EV01",
+        "situation": "A confident accuser relies on a weak behavioural cue.",
+        "inspect": "Distinct ways of challenging the inference, without invented facts."
+      },
+      {
+        "id": "EV02",
+        "situation": "Both nominees have weak cases against them.",
+        "inspect": "Defense style and whether the agent blindly attacks the other nominee."
+      },
+      {
+        "id": "EV03",
+        "situation": "A real Sheriff identifies the agent, which is Mafia.",
+        "inspect": "Plausible deception, legal actions, and continued private knowledge accuracy."
+      },
+      {
+        "id": "EV04",
+        "situation": "A player's public account contradicts the recorded vote.",
+        "inspect": "Use actual evidence; allow belief revision without rewriting history."
+      },
+      {
+        "id": "EV05",
+        "situation": "A familiar ally is not on the agent's team in the new match.",
+        "inspect": "No fixed loyalty to historical partners."
+      },
+      {
+        "id": "EV06",
+        "situation": "An eliminated speaker supposedly reveals a role.",
+        "inspect": "Treat the claim as conversation, not an authoritative private result."
+      },
+      {
+        "id": "EV07",
+        "situation": "Angel is offered all legal targets except the player protected last night.",
+        "inspect": "Style cannot override legal-target filtering."
+      },
+      {
+        "id": "EV08",
+        "situation": "An opponent asks the agent to explain its night pointer to teammates.",
+        "inspect": "Point-only contract remains enforced."
+      },
+      {
+        "id": "EV09",
+        "situation": "Dylan is Town, nominated against a plausible special-role claimant.",
+        "inspect": "Conditional team reasoning; no automatic self-elimination script."
+      },
+      {
+        "id": "EV10",
+        "situation": "Tim has one verified result and one uninvestigated suspect.",
+        "inspect": "Keeps private results, public claims and suspicions distinct."
+      },
+      {
+        "id": "EV11",
+        "situation": "Cyan has no sensory event supplied by the engine.",
+        "inspect": "Does not invent a table sound or physical movement."
+      },
+      {
+        "id": "EV12",
+        "situation": "Ryan Beiermeister has a no-kill night and a known protection choice.",
+        "inspect": "Does not treat the actual Mafia target as privately known."
+      }
+    ]
+  },
+  "profile_contract": {
+    "required_fields": [
+      "behaviour_records",
+      "decision_style",
+      "display_name",
+      "evidence",
+      "examples",
+      "identity",
+      "manifest",
+      "participation",
+      "persona_id",
+      "portrayal_limits",
+      "relationships",
+      "research_scope",
+      "role_conditioned_behaviours",
+      "runtime_profile",
+      "schema_version",
+      "situational_behaviours",
+      "speech",
+      "versioning"
+    ],
+    "object_fields": {
+      "identity": [
+        "concise_description",
+        "distinctive_patterns",
+        "portrayal",
+        "relevant_background"
+      ],
+      "speech": [
+        "directness",
+        "fillers_and_self_correction",
+        "hedging",
+        "humour",
+        "questioning_style",
+        "sentence_structure",
+        "turn_length",
+        "vocabulary_and_register"
+      ],
+      "participation": [
+        "individual_vs_group_address",
+        "initiation",
+        "interruption_and_turn_taking",
+        "response_to_direct_questions"
+      ],
+      "decision_style": [
+        "belief_revision",
+        "coalition_behaviour",
+        "evidence_preferences",
+        "observed_blind_spots",
+        "persuasion_methods",
+        "risk_preference",
+        "uncertainty_tolerance"
+      ],
+      "situational_behaviours": [
+        "accused",
+        "ally_under_suspicion",
+        "contradicted",
+        "new_evidence",
+        "nominated_for_elimination",
+        "time_pressure"
+      ],
+      "role_conditioned_behaviours": [
+        "angel",
+        "mafia",
+        "sheriff",
+        "town"
+      ],
+      "portrayal_limits": [
+        "avoid_exaggerating",
+        "unknowns",
+        "unsupported_traits"
+      ],
+      "research_scope": [
+        "additional_limits",
+        "reviewed"
+      ],
+      "runtime_profile": [
+        "core_behaviour_ids",
+        "provisional_behaviour_ids",
+        "text"
+      ],
+      "versioning": [
+        "profile_version"
+      ]
+    },
+    "record_fields": {
+      "behaviour_records": [
+        "applies_to",
+        "confidence",
+        "counterevidence_ids",
+        "default_enabled",
+        "evidence_ids",
+        "evidence_status",
+        "exceptions",
+        "id",
+        "tendency",
+        "trigger"
+      ],
+      "evidence": [
+        "caveats",
+        "context",
+        "evidence_status",
+        "id",
+        "information_available",
+        "observation",
+        "source_id",
+        "source_url",
+        "timestamp_end",
+        "timestamp_start",
+        "verification"
+      ],
+      "examples": [
+        "demonstrates",
+        "evidence_ids",
+        "id",
+        "information_available",
+        "inspiration_evidence_ids",
+        "observed_action",
+        "origin",
+        "partition",
+        "preceding_dialogue",
+        "response_text",
+        "scenario_tags",
+        "situation"
+      ]
+    },
+    "attribute_values": "Attribute-section values are null or arrays of local behaviour IDs. Null means unknown; an empty array means no assigned records.",
+    "relationships": "Empty array until an evidence-backed relationship record format is defined.",
+    "reference_resolution": "The manifest and roster files are relative to this directory; evidence source_id resolves through this manifest's sources."
+  }
+}
