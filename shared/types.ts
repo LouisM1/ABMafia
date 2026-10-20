@@ -1,0 +1,32 @@
+export type Role = 'Mafia' | 'Angel' | 'Sheriff' | 'Townsperson';
+export type Phase = 'MAFIA' | 'ANGEL' | 'SHERIFF' | 'DISCUSSION' | 'NOMINATIONS' | 'DEFENSE_1' | 'DEFENSE_2' | 'VOTE';
+export type Action = { type: 'Point' | 'Protect' | 'Investigate' | 'SkipAbility' | 'Speak' | 'Nominate' | 'Vote'; targets?: string[]; text?: string };
+export type Command = Action & { commandId: string; phaseId: string };
+export type Player = { id: string; name: string; personaId: string; seat: number; human: boolean; alive: boolean; role: Role };
+export type Event = { seq: number; round: number; phaseId: string; type: string; text: string; actor?: string; audience: 'public' | string[]; data?: unknown };
+export type Timing = { mafia: number; ability: number; discussion: number; nominations: number; defense: number; vote: number };
+export type PersonaPrompt = { id: string; name: string; text: string; behaviours: { trigger: string; tendency: string }[]; examples: { situation: string; response: string }[] };
+export type Game = {
+  id: string; session: string; version: number; rulesVersion: string;
+  mode: 'practice' | 'openai'; model: string; speed: 'standard' | 'quick'; timing: Timing;
+  status: 'RUNNING' | 'PAUSED' | 'FINISHED' | 'ABANDONED'; pauseReason?: string; remaining: number;
+  round: number; phase: Phase; phaseId: string; deadline: number;
+  players: Player[]; personas: Record<string, PersonaPrompt>;
+  pointers: Record<string, string>; firstPointer: string | null; kill: string | null;
+  protection: string | null; previousProtection: string | null; abilityDone: boolean;
+  investigations: Record<string, Record<string, Role>>;
+  nominations: Record<string, string[]>; nominees: string[]; votes: Record<string, string>; voteAttempt: number;
+  events: Event[]; receipts: Record<string, { actor: string; fingerprint: string }>;
+  winner?: 'Town' | 'Mafia'; aiCalls: number;
+};
+export type Legal = { type: Action['type']; targets: string[]; count: number }[];
+export type View = {
+  id: string; version: number; status: Game['status']; phase: Phase; phaseId: string; round: number;
+  deadline: number; remaining: number; serverNow: number; pauseReason?: string;
+  mode: Game['mode']; model: string; speed: Game['speed']; winner?: Game['winner']; aiCalls: number;
+  self: string; spectator: boolean;
+  players: (Omit<Player, 'role'> & { role?: Role })[];
+  events: Event[]; legal: Legal; nominees: string[]; votes: Record<string, string>;
+  ownNomination?: string[]; pointers?: Record<string, string>; protection?: string | null;
+  investigations?: Record<string, Role>; activeSpeaker?: string;
+};
