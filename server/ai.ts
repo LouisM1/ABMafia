@@ -50,7 +50,7 @@ export async function openaiAction(key: string, model: string, persona: PersonaP
       text: { format: { type: 'json_schema', name: 'mafia_action', strict: true, schema: actionSchema(view, type) } },
     }),
   });
-  if (!response.ok) throw new Error(response.status === 401 ? 'OpenAI rejected the API key. Update it in Model router.' :
+  if (!response.ok) throw new Error(response.status === 401 ? 'OpenAI rejected the API key. Update OPENAI_API_KEY in .env and restart the server.' :
     response.status === 429 ? 'OpenAI rate or credit limit reached. Check your account and resume.' :
     `OpenAI request failed (${response.status}). Your game can be resumed.`);
   const data = await response.json() as { status?: string; output?: { content?: { type: string; text?: string }[] }[] };

@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { loadEnvFile } from 'node:process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -10,11 +11,14 @@ import type { Action, Command, Game, View } from '../shared/types.js';
 import type { ServerResponse } from 'node:http';
 
 const ROOT = resolve(process.env.ABMAFIA_ROOT || process.cwd());
+try { loadEnvFile(resolve(ROOT, '.env')); } catch (error) {
+  if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+}
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim() || '';
 const PORT = Number(process.env.PORT || 4317);
 const storage = new Storage(resolve(ROOT, 'data/mafia.sqlite'));
 const personas = loadPersonas(ROOT);
 const games = new Map(storage.recover(Date.now()).reverse().map(g => [g.id, g]));
-const keys = new Map<string, string>(); // Deliberately never persisted or included in API responses.
 const streams = new Map<string, Set<ServerResponse>>();
 const pending = new Map<string, AbortController>();
 const performed = new Map<string, number>();
@@ -71,32 +75,16 @@ app.setErrorHandler((error, _request, reply) => {
     .send({ error: error instanceof RuleError ? error.message : validation ? 'Invalid request.' : 'The server could not complete that request.' });
 });
 app.get('/api/session', async request => ({
-  connected: keys.has(request.session), model: MODEL,
+  connected: !!OPENAI_API_KEY, model: MODEL,
   players: personas.map(p => ({ id: p.id, name: p.name })),
   game: latest(request.session) ? playerView(latest(request.session)!, 'p0') : null,
 }));
-app.post<{ Body: { apiKey: string } }>('/api/key', {
-  schema: { body: { type: 'object', additionalProperties: false, required: ['apiKey'], properties: { apiKey: { type: 'string', maxLength: 512 } } } },
-}, async request => {
-  const value = request.body.apiKey.trim();
-  if (value && (value.length < 20 || !/^[\x21-\x7e]+$/.test(value))) throw new RuleError('Enter a valid API key.');
-  if (value) keys.set(request.session, value);
-  else {
-    keys.delete(request.session);
-    const game = latest(request.session);
-    if (game?.mode === 'openai' && game.status === 'RUNNING') {
-      stopRequests(game.id);
-      commit(game, draft => pause(draft, Date.now(), 'API key removed. Reconnect it to resume.'));
-    }
-  }
-  return { connected: !!value };
-});
 app.post<{ Body: { name: string; mode: 'practice' | 'openai'; speed: 'standard' | 'quick' } }>('/api/games', {
   schema: { body: { type: 'object', additionalProperties: false, required: ['name', 'mode', 'speed'], properties: {
     name: { type: 'string', minLength: 1, maxLength: 30 }, mode: { enum: ['practice', 'openai'] }, speed: { enum: ['standard', 'quick'] },
   } } },
 }, async request => {
-  if (request.body.mode === 'openai' && !keys.has(request.session)) throw new RuleError('Add your API key in Model router first.');
+  if (request.body.mode === 'openai' && !OPENAI_API_KEY) throw new RuleError('Set OPENAI_API_KEY in .env and restart the server first.');
   const old = latest(request.session);
   if (old && ['RUNNING', 'PAUSED'].includes(old.status)) throw new RuleError('Leave the current game before starting another.');
   const g = createGame(request.session, personas, request.body.name, request.body.mode, request.body.speed, MODEL);
@@ -132,7 +120,7 @@ app.post<{ Params: { id: string }; Body: { operation: 'pause' | 'resume' | 'leav
 }, async request => {
   const g = owned(request.params.id, request.session);
   const op = request.body.operation;
-  if (op === 'resume' && g.mode === 'openai' && !keys.has(request.session)) throw new RuleError('Reconnect your API key first.');
+  if (op === 'resume' && g.mode === 'openai' && !OPENAI_API_KEY) throw new RuleError('Set OPENAI_API_KEY in .env and restart the server first.');
   if (op === 'resume' && g.aiCalls >= 200) throw new RuleError('This game reached its 200-request limit. Start a new game to continue playing.');
   stopRequests(g.id);
   return playerView(commit(g, d => {
@@ -148,13 +136,13 @@ async function runAI(g: Game, playerId: string, type: Action['type'], taskKey: s
   try {
     if (g.mode === 'openai') {
       if (g.aiCalls >= 200) throw new Error('This game reached its 200-request limit. Leave the game to start another.');
-      if (!keys.has(g.session)) throw new Error('API key needed. Reconnect it in Model router, then resume.');
+      if (!OPENAI_API_KEY) throw new Error('API key needed. Set OPENAI_API_KEY in .env and restart the server, then resume.');
       g = commit(games.get(g.id)!, d => { d.aiCalls++; });
     }
     const view = playerView(g, playerId);
     const persona = g.personas[g.players.find(p => p.id === playerId)!.personaId];
     const action = g.mode === 'practice' ? practiceAction(view, type) :
-      await openaiAction(keys.get(g.session)!, g.model, persona, view, type, ctrl.signal);
+      await openaiAction(OPENAI_API_KEY, g.model, persona, view, type, ctrl.signal);
     const current = games.get(g.id)!;
     if (ctrl.signal.aborted || current.status !== 'RUNNING' || current.phaseId !== g.phaseId || Date.now() >= current.deadline) return;
     commit(current, draft => accept(draft, playerId, { ...action, commandId: randomUUID(), phaseId: g.phaseId }, Date.now()));

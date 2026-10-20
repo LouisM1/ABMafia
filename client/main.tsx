@@ -21,7 +21,6 @@ function App() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [router, setRouter] = useState(false);
-  const [apiKey, setApiKey] = useState('');
   const [name, setName] = useState('You');
   const [mode, setMode] = useState<'openai' | 'practice'>('openai');
   const [speed, setSpeed] = useState<'standard' | 'quick'>('quick');
@@ -157,13 +156,8 @@ function App() {
         <h2 id="router-title">Give the table a voice.</h2><p>Your key connects this local server directly to OpenAI.</p>
         <label>Model<select disabled><option>GPT‑5.4 nano · low cost</option></select></label>
         <p class="micro">$0.20 input / $1.25 output per million tokens. Usage is billed to your OpenAI account. 200-request cap per game.</p>
-        <form onSubmit={e => { e.preventDefault(); void attempt(async () => {
-          const value = apiKey; const r = await api<{ connected: boolean }>('/key', { apiKey: value });
-          setApiKey(''); setSession(s => s ? { ...s, connected: r.connected } : s); setRouter(false);
-        }); }}><label>OpenAI API key<input type="password" value={apiKey} autoComplete="off" placeholder={session?.connected ? 'Replace your loaded key…' : 'sk-…'} onInput={e => setApiKey(e.currentTarget.value)}/></label>
-        <p class="micro">Stored only in server memory. Re-enter it after restarting the server. Never saved to browser storage or the game database.</p>
-        <div class="action-buttons"><button class="primary" disabled={busy || !apiKey.trim()} type="submit">Save key</button>
-          {session?.connected && <button type="button" class="subtle" disabled={busy} onClick={() => void attempt(async () => { await api('/key', { apiKey: '' }); setSession(s => s ? { ...s, connected: false } : s); setApiKey(''); })}>Forget key</button>}</div></form>
+        <p>Add your key to <code>OPENAI_API_KEY</code> in the project's <code>.env</code> file, then restart the server and refresh this page.</p>
+        <p class="micro">The key stays on the server. The .env file is ignored by Git.</p>
         <div class="key-status">{session?.connected ? '● Key loaded · verified when a game makes its first request' : '○ No API key loaded · practice mode is available'}</div>
       </section>
     </div>}

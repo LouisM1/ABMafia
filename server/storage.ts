@@ -38,7 +38,7 @@ export class Storage {
       if (g.status !== 'RUNNING') continue;
       // remaining is a durable checkpoint, not elapsed wall time while the server was down.
       const remaining = g.remaining;
-      pause(g, now, 'Server restarted. Your game is saved. Reconnect your API key if needed, then resume.');
+      pause(g, now, 'Server restarted. Your game is saved. Resume when you are ready.');
       g.remaining = remaining; g.version++; this.save(g);
     }
     return games;

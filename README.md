@@ -14,7 +14,15 @@ npm start
 
 Open **http://127.0.0.1:4317**. The server listens only on this computer.
 
-Choose **Model router**, paste your OpenAI API key, and save it. The default route is **gpt-5.4-nano**, with reasoning disabled and short structured responses. Your key is kept in server memory for this browser session, never written to the database or returned to the browser. Re-enter it after restarting the server. Removing it pauses an active OpenAI game. Model access is checked on the first request.
+Put your key in the project-root `.env` file:
+
+```dotenv
+OPENAI_API_KEY=your_key_here
+```
+
+If the file is missing, copy `.env.example` to `.env` first. Restart the server and refresh the page after changing it. Node loads this file directly; no extra dependency is needed. An existing shell environment variable takes precedence over the file.
+
+The default model is **gpt-5.4-nano**, with reasoning disabled and short structured responses. The key stays on the server and is never returned to the browser or written into the game database. `.env` and `.env.*` are ignored by Git, except the blank `.env.example` template. Model access is checked on the first request.
 
 **Practice game** works without a key. Practice bots use simple scripted choices and sample dialogue; they do not reproduce the full LLM personas.
 
