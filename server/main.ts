@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { Storage } from './storage.js';
 import { accept, createGame, legalActions, living, pause, playerView, resume, RuleError, tick } from './engine.js';
 import { loadPersonas } from './personas.js';
-import { MODEL, openaiAction, practiceAction } from './ai.js';
+import { MODEL, openaiAction } from './ai.js';
 import type { Action, Command, Game, View } from '../shared/types.js';
 import type { ServerResponse } from 'node:http';
 
@@ -79,15 +79,15 @@ app.get('/api/session', async request => ({
   players: personas.map(p => ({ id: p.id, name: p.name })),
   game: latest(request.session) ? playerView(latest(request.session)!, 'p0') : null,
 }));
-app.post<{ Body: { name: string; mode: 'practice' | 'openai'; speed: 'standard' | 'quick' } }>('/api/games', {
-  schema: { body: { type: 'object', additionalProperties: false, required: ['name', 'mode', 'speed'], properties: {
-    name: { type: 'string', minLength: 1, maxLength: 30 }, mode: { enum: ['practice', 'openai'] }, speed: { enum: ['standard', 'quick'] },
+app.post<{ Body: { name: string; speed: 'standard' | 'quick' } }>('/api/games', {
+  schema: { body: { type: 'object', additionalProperties: false, required: ['name', 'speed'], properties: {
+    name: { type: 'string', minLength: 1, maxLength: 30 }, speed: { enum: ['standard', 'quick'] },
   } } },
 }, async request => {
-  if (request.body.mode === 'openai' && !OPENAI_API_KEY) throw new RuleError('Set OPENAI_API_KEY in .env and restart the server first.');
+  if (!OPENAI_API_KEY) throw new RuleError('Set OPENAI_API_KEY in .env and restart the server first.');
   const old = latest(request.session);
   if (old && ['RUNNING', 'PAUSED'].includes(old.status)) throw new RuleError('Leave the current game before starting another.');
-  const g = createGame(request.session, personas, request.body.name, request.body.mode, request.body.speed, MODEL);
+  const g = createGame(request.session, personas, request.body.name, request.body.speed, MODEL);
   storage.save(g); games.set(g.id, g); return playerView(g, 'p0');
 });
 app.get<{ Params: { id: string } }>('/api/games/:id', async request => playerView(owned(request.params.id, request.session), 'p0'));
@@ -120,7 +120,8 @@ app.post<{ Params: { id: string }; Body: { operation: 'pause' | 'resume' | 'leav
 }, async request => {
   const g = owned(request.params.id, request.session);
   const op = request.body.operation;
-  if (op === 'resume' && g.mode === 'openai' && !OPENAI_API_KEY) throw new RuleError('Set OPENAI_API_KEY in .env and restart the server first.');
+  if (op === 'resume' && (g as { mode: string }).mode !== 'openai') throw new RuleError('This old practice game is archived. Start a new game.');
+  if (op === 'resume' && !OPENAI_API_KEY) throw new RuleError('Set OPENAI_API_KEY in .env and restart the server first.');
   if (op === 'resume' && g.aiCalls >= 200) throw new RuleError('This game reached its 200-request limit. Start a new game to continue playing.');
   stopRequests(g.id);
   return playerView(commit(g, d => {
@@ -134,15 +135,12 @@ async function runAI(g: Game, playerId: string, type: Action['type'], taskKey: s
   const ctrl = new AbortController(); pending.set(taskKey, ctrl);
   const timeout = setTimeout(() => ctrl.abort(), Math.min(15_000, Math.max(100, g.deadline - Date.now() - 100)));
   try {
-    if (g.mode === 'openai') {
-      if (g.aiCalls >= 200) throw new Error('This game reached its 200-request limit. Leave the game to start another.');
-      if (!OPENAI_API_KEY) throw new Error('API key needed. Set OPENAI_API_KEY in .env and restart the server, then resume.');
-      g = commit(games.get(g.id)!, d => { d.aiCalls++; });
-    }
+    if (g.aiCalls >= 200) throw new Error('This game reached its 200-request limit. Leave the game to start another.');
+    if (!OPENAI_API_KEY) throw new Error('API key needed. Set OPENAI_API_KEY in .env and restart the server, then resume.');
+    g = commit(games.get(g.id)!, d => { d.aiCalls++; });
     const view = playerView(g, playerId);
     const persona = g.personas[g.players.find(p => p.id === playerId)!.personaId];
-    const action = g.mode === 'practice' ? practiceAction(view, type) :
-      await openaiAction(OPENAI_API_KEY, g.model, persona, view, type, ctrl.signal);
+    const action = await openaiAction(OPENAI_API_KEY, g.model, persona, view, type, ctrl.signal);
     const current = games.get(g.id)!;
     if (ctrl.signal.aborted || current.status !== 'RUNNING' || current.phaseId !== g.phaseId || Date.now() >= current.deadline) return;
     commit(current, draft => accept(draft, playerId, { ...action, commandId: randomUUID(), phaseId: g.phaseId }, Date.now()));
@@ -162,7 +160,7 @@ function schedule(g: Game) {
   const speaking = g.phase === 'DISCUSSION' || g.phase.startsWith('DEFENSE');
   const tasks = living(g).filter(p => !p.human).sort((a, b) =>
     (lastSpeech.get(`${g.id}:${a.id}`) || 0) - (lastSpeech.get(`${g.id}:${b.id}`) || 0));
-  if (speaking && (now - (lastSpeech.get(g.id) || 0) < (g.mode === 'practice' ? 3500 : 800) ||
+  if (speaking && (now - (lastSpeech.get(g.id) || 0) < 800 ||
       [...pending.keys()].some(k => k.startsWith(g.id + ':')))) return;
   for (const p of tasks) {
     if (pending.size >= 4) break;

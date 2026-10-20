@@ -22,9 +22,9 @@ OPENAI_API_KEY=your_key_here
 
 If the file is missing, copy `.env.example` to `.env` first. Restart the server and refresh the page after changing it. Node loads this file directly; no extra dependency is needed. An existing shell environment variable takes precedence over the file.
 
-The default model is **gpt-5.4-nano**, with reasoning disabled and short structured responses. The key stays on the server and is never returned to the browser or written into the game database. `.env` and `.env.*` are ignored by Git, except the blank `.env.example` template. Model access is checked on the first request.
+The model configured in `server/ai.ts` is **gpt-6-luna**, with reasoning disabled and short structured responses. The key stays on the server and is never returned to the browser or written into the game database. `.env` and `.env.*` are ignored by Git, except the blank `.env.example` template. Model access is checked on the first request.
 
-**Practice game** works without a key. Practice bots use simple scripted choices and sample dialogue; they do not reproduce the full LLM personas.
+All AI decisions and dialogue come from live OpenAI requests. There is no scripted mode or canned-response fallback. A key is required to start a game. Old practice games are archived when the server starts.
 
 ## Playing
 
@@ -43,7 +43,7 @@ API errors pause the game with a message. Correct the key or account issue and r
 | Location | Purpose |
 |---|---|
 | `server/engine.ts` | Authoritative game rules, phases, legal actions, secrets and victory |
-| `server/ai.ts` | OpenAI route, compact rules/persona prompts and practice bots |
+| `server/ai.ts` | OpenAI route and compact rules/persona prompts |
 | `server/personas.ts` | Loads the existing master manifest and enabled runtime traits |
 | `server/storage.ts` | SQLite snapshots and an event journal |
 | `server/main.ts` | Local HTTP server, event stream, session ownership and AI scheduling |

@@ -8,7 +8,7 @@ export type Timing = { mafia: number; ability: number; discussion: number; nomin
 export type PersonaPrompt = { id: string; name: string; text: string; behaviours: { trigger: string; tendency: string }[]; examples: { situation: string; response: string }[] };
 export type Game = {
   id: string; session: string; version: number; rulesVersion: string;
-  mode: 'practice' | 'openai'; model: string; speed: 'standard' | 'quick'; timing: Timing;
+  mode: 'openai'; model: string; speed: 'standard' | 'quick'; timing: Timing;
   status: 'RUNNING' | 'PAUSED' | 'FINISHED' | 'ABANDONED'; pauseReason?: string; remaining: number;
   round: number; phase: Phase; phaseId: string; deadline: number;
   players: Player[]; personas: Record<string, PersonaPrompt>;

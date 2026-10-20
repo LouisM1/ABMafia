@@ -38,20 +38,20 @@ function choose(g: Game, candidates: string[], count: number, purpose: string, d
   emit(g, 'RandomSelection', purpose, [], undefined, { candidates, selected: result });
   return result;
 }
-export function createGame(session: string, personas: PersonaPrompt[], name: string, mode: Game['mode'], speed: Game['speed'], model: string, now = Date.now(), draw = secureDraw): Game {
+export function createGame(session: string, personas: PersonaPrompt[], name: string, speed: Game['speed'], model: string, now = Date.now(), draw = secureDraw): Game {
   requireRule(personas.length === 11 && new Set(personas.map(p => p.id)).size === 11, 'Eleven unique personas are required.');
   const roles: Role[] = ['Mafia', 'Mafia', 'Mafia', 'Angel', 'Sheriff', ...Array<Role>(7).fill('Townsperson')];
   for (let i = roles.length - 1; i > 0; i--) { const j = draw(i + 1); [roles[i], roles[j]] = [roles[j], roles[i]]; }
   const roster = [{ id: 'human', name: name.trim() || 'You' }, ...personas];
   const players = roster.map((p, seat) => ({ id: `p${seat}`, name: p.name, personaId: p.id, seat, human: seat === 0, alive: true, role: roles[seat] }));
   const g: Game = {
-    id: randomUUID(), session, version: 0, rulesVersion: RULES_VERSION, mode, model, speed,
+    id: randomUUID(), session, version: 0, rulesVersion: RULES_VERSION, mode: 'openai', model, speed,
     timing: { ...(speed === 'quick' ? QUICK : STANDARD) }, status: 'RUNNING', remaining: 0,
     round: 1, phase: 'MAFIA', phaseId: '', deadline: 0, players, personas: Object.fromEntries(personas.map(p => [p.id, p])),
     pointers: {}, firstPointer: null, kill: null, protection: null, previousProtection: null, abilityDone: false,
     investigations: {}, nominations: {}, nominees: [], votes: {}, voteAttempt: 1, events: [], receipts: {}, aiCalls: 0,
   };
-  emit(g, 'GameCreated', `Twelve seats. Three Mafia. Trust carefully. ${mode === 'practice' ? 'Practice bots are active; no LLM calls.' : 'OpenAI personas are active.'}`);
+  emit(g, 'GameCreated', 'Twelve seats. Three Mafia. Trust carefully. OpenAI personas are active.');
   emit(g, 'RolesAssigned', 'Roles assigned.', [], undefined, players.map(p => ({ id: p.id, role: p.role })));
   open(g, 'MAFIA', now);
   return g;

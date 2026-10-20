@@ -35,6 +35,11 @@ export class Storage {
   recover(now: number) {
     const games = this.all();
     for (const g of games) {
+      // Never silently turn an old free game into paid API requests.
+      if ((g as { mode: string }).mode !== 'openai') {
+        if (g.status !== 'ABANDONED') { g.status = 'ABANDONED'; g.remaining = 0; g.version++; this.save(g); }
+        continue;
+      }
       if (g.status !== 'RUNNING') continue;
       // remaining is a durable checkpoint, not elapsed wall time while the server was down.
       const remaining = g.remaining;

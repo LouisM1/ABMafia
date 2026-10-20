@@ -22,7 +22,6 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [router, setRouter] = useState(false);
   const [name, setName] = useState('You');
-  const [mode, setMode] = useState<'openai' | 'practice'>('openai');
   const [speed, setSpeed] = useState<'standard' | 'quick'>('quick');
   const [targets, setTargets] = useState<string[]>([]);
   const [message, setMessage] = useState('');
@@ -51,10 +50,10 @@ function App() {
   async function attempt(fn: () => Promise<void>) {
     setBusy(true); setError(''); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Something went wrong.'); } finally { setBusy(false); }
   }
-  async function start(chosen = mode) {
+  async function start() {
     await attempt(async () => {
-      if (chosen === 'openai' && !session?.connected) { setRouter(true); return; }
-      receive(await api<View>('/games', { name: name.trim() || 'You', mode: chosen, speed }));
+      if (!session?.connected) { setRouter(true); return; }
+      receive(await api<View>('/games', { name: name.trim() || 'You', speed }));
     });
   }
   async function control(operation: 'pause' | 'resume' | 'leave') {
@@ -93,11 +92,10 @@ function App() {
       <section class="welcome"><div class="eyebrow">ONE HUMAN. ELEVEN AI. THREE LIARS.</div><h1>A seat at<br/>the table.</h1><p class="intro">Read the room. Make your case.<br/>Find the Mafia before they find you.</p>
         <div class="setup">
           <label>Your name<input value={name} maxLength={30} onInput={e => setName(e.currentTarget.value)} placeholder="Your name"/></label>
-          <div class="setup-row"><label>Players<select value={mode} onChange={e => setMode(e.currentTarget.value as typeof mode)}><option value="openai">OpenAI personas</option><option value="practice">Practice bots · free</option></select></label>
+          <div class="setup-row"><label>Players<select disabled><option>OpenAI personas</option></select></label>
           <label>Pace<select value={speed} onChange={e => setSpeed(e.currentTarget.value as typeof speed)}><option value="quick">Quick nights</option><option value="standard">Standard</option></select></label></div>
           <button class="primary enter" disabled={busy || !session} onClick={() => void start()}>Take your seat <span>↗</span></button>
-          <button class="practice-link" disabled={busy || !session} onClick={() => void start('practice')}>Or try a free practice game</button>
-          <p class="micro">{mode === 'openai' ? 'GPT‑5.4 nano · Your API account is billed for play.' : 'Scripted practice bots. No API key or charges.'} Roles are randomized each game.</p>
+          <p class="micro">{session?.model} · Your API account is billed for play. Roles are randomized each game.</p>
         </div>
       </section>
       <section class="guest-list"><div class="section-title"><span>TONIGHT’S COMPANY</span><span>11 PERSONAS</span></div>
@@ -106,7 +104,7 @@ function App() {
       </section>
       <div class="lobby-footer"><span>♣ Bluffing encouraged. Trust optional.</span><span>3 Mafia · 1 Angel · 1 Sheriff · 7 Town</span></div>
     </main> : <main class="game">
-      <div class="game-heading"><div><div class="eyebrow">{game.mode === 'practice' ? 'PRACTICE · SCRIPTED BOTS' : 'OPENAI · GPT‑5.4 NANO'} / ROUND {game.round}</div><h1>{game.winner ? `${game.winner} wins.` : PHASES[game.phase]}</h1></div>
+      <div class="game-heading"><div><div class="eyebrow">OPENAI · {game.model} / ROUND {game.round}</div><h1>{game.winner ? `${game.winner} wins.` : PHASES[game.phase]}</h1></div>
         <div class="game-tools">{game.status !== 'FINISHED' && <><span class="timer" aria-label={`${seconds} seconds remaining`}>{game.status === 'PAUSED' ? 'PAUSED' : `${seconds}s`}</span><button class="subtle" disabled={busy} onClick={() => void control(game.status === 'PAUSED' ? 'resume' : 'pause')}>{game.status === 'PAUSED' ? 'Resume' : 'Pause'}</button></>}
         <button class="subtle" disabled={busy} onClick={() => void control('leave')}>{game.status === 'FINISHED' ? 'New game' : 'Leave table'}</button></div>
       </div>
@@ -146,7 +144,7 @@ function App() {
               {e.data !== undefined && <details><summary>{game.spectator ? 'View event details' : 'Your details'}</summary><pre>{JSON.stringify(e.data, null, 2)}</pre></details>}
             </article>;
           })}</div>
-          <div class="conversation-footer">{game.mode === 'practice' ? 'Practice mode · no API calls' : `${game.aiCalls}/200 model requests this game`}</div>
+          <div class="conversation-footer">{game.aiCalls}/200 model requests this game</div>
         </aside>
       </div>
     </main>}
@@ -154,11 +152,11 @@ function App() {
       <section class="modal" role="dialog" aria-modal="true" aria-labelledby="router-title">
         <div class="section-title"><span>MODEL ROUTER</span><button class="close" onClick={() => setRouter(false)} aria-label="Close model router">×</button></div>
         <h2 id="router-title">Give the table a voice.</h2><p>Your key connects this local server directly to OpenAI.</p>
-        <label>Model<select disabled><option>GPT‑5.4 nano · low cost</option></select></label>
-        <p class="micro">$0.20 input / $1.25 output per million tokens. Usage is billed to your OpenAI account. 200-request cap per game.</p>
+        <label>Model<select disabled><option>{session?.model}</option></select></label>
+        <p class="micro">Every AI turn sends a live request to OpenAI. Usage is billed to your OpenAI account. 200-request cap per game.</p>
         <p>Add your key to <code>OPENAI_API_KEY</code> in the project's <code>.env</code> file, then restart the server and refresh this page.</p>
         <p class="micro">The key stays on the server. The .env file is ignored by Git.</p>
-        <div class="key-status">{session?.connected ? '● Key loaded · verified when a game makes its first request' : '○ No API key loaded · practice mode is available'}</div>
+        <div class="key-status">{session?.connected ? '● Key loaded · verified when a game makes its first request' : '○ No API key loaded · add it to .env before playing'}</div>
       </section>
     </div>}
     <footer class="site-footer"><span>ABMAFIA / EARLY ACCESS</span><span>A game of imperfect information.</span></footer>

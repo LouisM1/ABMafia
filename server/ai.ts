@@ -53,42 +53,12 @@ export async function openaiAction(key: string, model: string, persona: PersonaP
   if (!response.ok) throw new Error(response.status === 401 ? 'OpenAI rejected the API key. Update OPENAI_API_KEY in .env and restart the server.' :
     response.status === 429 ? 'OpenAI rate or credit limit reached. Check your account and resume.' :
     `OpenAI request failed (${response.status}). Your game can be resumed.`);
-  const data = await response.json() as { status?: string; output?: { content?: { type: string; text?: string }[] }[] };
+  const data = await response.json() as { status?: string; output?: { phase?: string; content?: { type: string; text?: string }[] }[] };
   if (data.status !== 'completed') throw new Error('OpenAI did not finish its response. Resume to retry.');
-  const text = data.output?.flatMap(x => x.content || []).filter(x => x.type === 'output_text').map(x => x.text).join('') || '';
+  // Some models emit commentary before the final JSON. Commentary is not a game action.
+  const messages = data.output || [];
+  const finals = messages.filter(x => x.phase === 'final_answer');
+  const answer = finals.length ? finals : messages.filter(x => !x.phase);
+  const text = answer.flatMap(x => x.content || []).filter(x => x.type === 'output_text').map(x => x.text).join('');
   try { return JSON.parse(text) as Action; } catch { throw new Error('OpenAI returned no usable action. Resume to retry.'); }
-}
-
-function hash(text: string) { let n = 2166136261; for (const c of text) n = Math.imul(n ^ c.charCodeAt(0), 16777619); return n >>> 0; }
-export function practiceAction(view: View, type: Action['type']): Action {
-  const self = view.players.find(p => p.id === view.self)!;
-  const legal = view.legal.find(a => a.type === type)!;
-  const sorted = [...legal.targets].sort((a, b) => {
-    const rank = (id: string) => {
-      const p = view.players.find(p => p.id === id)!;
-      return (p.id === self.id ? 2e10 : 0) + (self.role === 'Mafia' && p.role === 'Mafia' ? 1e10 : 0) -
-        (self.role !== 'Mafia' && p.role === 'Mafia' ? 1e11 : 0) + hash(`${view.id}:${view.round}:${self.id}:${id}`);
-    };
-    return rank(a) - rank(b);
-  });
-  if (type !== 'Speak') return { type, targets: sorted.slice(0, legal.count), text: '' };
-  const result = Object.entries(view.investigations || {}).find(([id, role]) => role === 'Mafia' && view.players.some(p => p.id === id && p.alive));
-  if (result) return { type, text: `I'm the Sheriff. I investigated ${view.players.find(p => p.id === result[0])!.name}: Mafia. That is my result, not a read.`, targets: [] };
-  if (view.activeSpeaker === self.id) return { type, text: `I'm ${self.role === 'Angel' ? 'the Angel' : 'Town'}. Look at the actual votes and claims before deciding. Being nominated does not make someone guilty.`, targets: [] };
-  const candidates = view.players.filter(p => p.alive && p.id !== self.id && !(self.role === 'Mafia' && p.role === 'Mafia'));
-  const target = candidates[hash(`${view.round}:${self.id}`) % candidates.length]?.name || 'the table';
-  const lines: Record<string, string> = {
-    bryan_johnson: `${target}, what is your strongest reason for suspecting someone? We need a concrete read from the people we haven't heard from.`,
-    sam_altman: `I'm not sure the current accusation establishes much. ${target}, what would change your mind?`,
-    palmer_luckey: `We need an accusation someone can actually answer. ${target}, give us the premise, not just the conclusion.`,
-    cyan_banister: `I'm listening to the explanations. ${target}, who do you suspect and why?`,
-    josie_zayner: `${target}, you're on my list of questions. Give me something more convincing than just saying you're Town.`,
-    tim_urban: `Let's separate a verified result from a claim. ${target}, which part of your read do you actually know?`,
-    liv_boeree: `${target}, explain the information behind your read. A possible explanation is not the same thing as a confirmed role.`,
-    ryan_beiermeister: `${target}, one suspect and one reason. Let's get something useful on the table.`,
-    dylan_field: `If we get this vote wrong, we help the Mafia. ${target}, what supports the alternative explanation?`,
-    ryan_petersen: `${target}, who's your pick? I'd like an actual reason before I follow the table.`,
-    trae_stephens: `What can we verify about that story? ${target}, we need more than an account nobody can check.`,
-  };
-  return { type, targets: [], text: lines[self.personaId] || `Let's hear from ${target}.` };
 }

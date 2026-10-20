@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { accept, checkWinner, createGame, legalActions, pause, playerView, resume, tick } from '../server/engine.js';
 import type { Action, Game, PersonaPrompt, Phase, Role } from '../shared/types.js';
-import { actionSchema, context, openaiAction, practiceAction, MODEL } from '../server/ai.js';
+import { actionSchema, context, openaiAction, MODEL } from '../server/ai.js';
 import { Storage } from '../server/storage.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +11,7 @@ import { join } from 'node:path';
 
 const personas: PersonaPrompt[] = Array.from({length: 11}, (_, i) => ({id:`ai${i}`,name:`Player ${i+1}`,text:'A test persona.',behaviours:[],examples:[]}));
 function game() {
-  const g = createGame('owner', personas, 'Human', 'practice', 'quick', MODEL, 0, n => n - 1);
+  const g = createGame('owner', personas, 'Human', 'quick', MODEL, 0, n => n - 1);
   // Identity shuffle gives p0-p2 Mafia, p3 Angel, p4 Sheriff.
   return g;
 }
@@ -137,7 +137,7 @@ test('missing required ballots pause; resume preserves accepted choices',()=>{
   assert.equal(g.status,'PAUSED');resume(g,200_000);assert.deepEqual(g.nominations.p0,['p5','p6']);
   assert.equal(legalActions(g,'p0').length,0);assert.equal(legalActions(g,'p1')[0].type,'Nominate');
 });
-test('full practice games terminate with legal actions, including human controls',()=>{
+test('complete rule simulations terminate with legal actions, including human controls',()=>{
   for(let run=0;run<20;run++){
     const g=game();
     for(let step=0;step<500 && g.status==='RUNNING';step++){
@@ -145,7 +145,10 @@ test('full practice games terminate with legal actions, including human controls
       for(const p of g.players){
         const v=playerView(g,p.id,Math.max(1,g.deadline-100));const type=v.legal[0]?.type;
         if(type && type!=='Speak'){
-          const a=practiceAction(v,type);act(g,p.id,a.type,a.targets,a.text);
+          const legal=v.legal.find(a=>a.type===type)!;
+          const offset=run % legal.targets.length;
+          const choices=[...legal.targets.slice(offset),...legal.targets.slice(0,offset)];
+          act(g,p.id,type,choices.slice(0,legal.count));
         }
       }
       if(g.status==='RUNNING' && g.phaseId===startingPhase) expire(g);
@@ -182,4 +185,36 @@ test('OpenAI adapter sends only authorized context and validates structured comp
   const action=await openaiAction('test-key-not-real',MODEL,personas[0],view,'Nominate',new AbortController().signal,fakeFetch);
   assert.equal(action.type,'Nominate');assert.equal(actionSchema(view,'Nominate').properties.targets.minItems,2);
   assert(!('personas' in context(view)));
+});
+
+test('legacy practice games are archived on recovery instead of making paid requests',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'abmafia-legacy-'));
+  try {
+    const s=new Storage(join(dir,'test.sqlite')); const g=game();
+    (g as { mode: string }).mode='practice'; s.save(g);
+    const recovered=s.recover(1_000_000)[0];
+    assert.equal(recovered.status,'ABANDONED'); assert.equal(recovered.aiCalls,0);
+    assert.equal(legalActions(recovered,'p0').length,0); s.close();
+  } finally { rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('OpenAI commentary is excluded from the final action JSON',async()=>{
+  const g=game();phase(g,'NOMINATIONS');const view=playerView(g,'p5');
+  const expected={type:'Nominate',targets:['p6','p7'],text:''};
+  const fakeFetch=(async()=>new Response(JSON.stringify({status:'completed',output:[
+    {phase:'commentary',content:[{type:'output_text',text:'I will choose two players.'}]},
+    {phase:'final_answer',content:[{type:'output_text',text:JSON.stringify(expected)}]},
+  ]}))) as typeof fetch;
+  const action=await openaiAction('test-key-not-real',MODEL,personas[0],view,'Nominate',new AbortController().signal,fakeFetch);
+  assert.deepEqual(action,expected);
+  assert(accept(g,'p5',{...action,commandId:'model-final',phaseId:g.phaseId},1));
+});
+
+test('malformed model output is rejected without a canned fallback',async()=>{
+  const g=game();phase(g,'NOMINATIONS');const view=playerView(g,'p5');
+  const fakeFetch=(async()=>new Response(JSON.stringify({status:'completed',output:[
+    {content:[{type:'output_text',text:'This is not an action.'}]},
+  ]}))) as typeof fetch;
+  await assert.rejects(openaiAction('test-key-not-real',MODEL,personas[0],view,'Nominate',new AbortController().signal,fakeFetch),/no usable action/);
+  assert.deepEqual(g.nominations,{});
 });
