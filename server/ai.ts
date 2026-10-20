@@ -1,6 +1,6 @@
 import type { Action, PersonaPrompt, View } from '../shared/types.js';
 
-export const MODEL = 'gpt-5.4-nano';
+export const MODEL = 'gpt-6-luna';
 export const PLAYER_RULES = `You are one player in Mafia, pursuing your assigned team's victory.
 There are 12 initial players: 3 Mafia, 1 Angel, 1 Sheriff, 7 Townspeople. Roles never change.
 Town wins when all Mafia die; Mafia wins at parity with the combined living Town roles.
