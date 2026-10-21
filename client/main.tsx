@@ -119,58 +119,55 @@ function App() {
     setReply({ playerId: event.actor, messageId: event.seq }); composer.current?.focus();
   }
   const speakerName = players.find(p => p.id === game?.activeSpeaker)?.name;
-  const waiting = !game ? 'Start a game to join the conversation.' : game.status === 'FINISHED' ? 'The game is over.' : game.status === 'PAUSED' ? 'Resume the game to continue.' : game.spectator ? 'You’re watching as a spectator.' : night ? 'Night falls. The table is silent.' : speakerName ? `${speakerName} has the floor.` : game.phase === 'NOMINATIONS' ? 'Choose two players to nominate.' : game.phase === 'VOTE' ? 'Cast your vote at the table.' : 'Waiting for the table…';
+  const waiting = !game ? 'Start a game to chat.' : game.status === 'FINISHED' ? 'Game over.' : game.status === 'PAUSED' ? 'Resume the game to continue.' : game.spectator ? 'Spectating.' : night ? 'Chat is disabled at night.' : speakerName ? `${speakerName} is defending.` : game.phase === 'NOMINATIONS' ? 'Choose two players to nominate.' : game.phase === 'VOTE' ? 'Select a player to vote.' : 'Waiting for the next phase.';
   const events = game?.events.filter(e => PUBLIC_EVENTS.has(e.type)) ?? [];
   return <div class="app-shell">
     {error && <div role="alert" class="notice error">{error}<button onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
-    {!online && game && <div role="status" class="notice">Reconnecting to the table. Your accepted actions are saved.</div>}
+    {!online && game && <div role="status" class="notice">Reconnecting. Your actions are saved.</div>}
     {game?.status === 'PAUSED' && <div role="status" class="notice">{game.pauseReason}<button disabled={busy} onClick={() => void control('resume')}>Resume ↗</button></div>}
     <main class="game-layout">
       <section class="play-area" aria-label="Mafia game table">
         <div class="scene-wrap">
           <Lounge players={players} selected={selected} eligible={eligible} speaking={running ? game?.activeSpeaker || speaker : undefined} night={night} onChoose={choose}/>
-          <div class="scene-heading">
-            <div class="scene-eyebrow">{game ? `ROUND ${game.round} · ${players.filter(p => p.alive).length} AT THE TABLE` : 'WELCOME TO THE CLUB'}</div>
-            <h1>{game?.winner ? `${game.winner} wins.` : game ? PHASES[game.phase] : 'Trust is a gamble.'}</h1>
-            {!game && <p>Take your seat. Read the room.<br/>Find the Mafia before they find you.</p>}
-          </div>
+          {game ? <div class="scene-heading">
+            <div class="scene-eyebrow">ROUND {game.round} · {players.filter(p => p.alive).length} PLAYERS</div>
+            <h1>{game.winner ? `${game.winner} wins.` : PHASES[game.phase]}</h1>
+          </div> : <h1 class="sr-only">Playing area</h1>}
           {game && game.status !== 'FINISHED' && <div class="phase-clock" aria-label={running ? `${seconds} seconds remaining` : 'Game paused'}>{running ? `${seconds}s` : 'Paused'}</div>}
-          <div class="scene-footnote">{game ? self?.alive ? 'YOUR SEAT IS AT THE FRONT OF THE TABLE' : 'EMPTY CHAIRS MARK ELIMINATED PLAYERS' : 'TWELVE SEATS. ONE TABLE. TRUST CAREFULLY.'}</div>
         </div>
         <div class="table-controls">
-          {!game ? <div class="start-row"><p>3 Mafia · 1 Angel · 1 Sheriff · 7 Townspeople</p><button class="primary start-game" disabled={busy || !session} onClick={() => void start()}>{busy ? 'Taking your seat…' : 'Start game'} <span>↗</span></button></div> : <>
+          {!game ? <div class="start-row"><button class="primary start-game" disabled={busy || !session} onClick={() => void start()}>{busy ? 'Starting…' : 'Start game'}</button></div> : <>
             <div class="role-line"><span class={`role-card ${self?.role === 'Mafia' ? 'mafia' : ''}`}><small>{game.spectator ? 'SPECTATOR · YOUR ROLE' : 'YOUR SECRET ROLE'}</small><strong>{self?.role}</strong></span><div class="phase-instructions">
-              <h2>{game.status === 'FINISHED' ? `${game.winner} takes the table.` : game.status === 'PAUSED' ? 'The table is paused.' : game.spectator ? 'Watch the surviving players.' : canChoose ? legal?.count === 2 ? 'Nominate two different players.' : 'Choose a player.' : canSpeak ? game.activeSpeaker ? 'Your defense. Make it count.' : 'The floor is open.' : game.ownNomination && game.phase === 'NOMINATIONS' ? 'Nominations submitted.' : game.votes[game.self] && game.phase === 'VOTE' ? 'Your vote is in.' : 'Read the room.'}</h2>
-              <p>{game.spectator ? 'All roles are revealed to you. Living players keep their own private knowledge.' : canChoose ? legal?.type === 'Point' ? 'Only Mafia see your target. You can revise it until dawn.' : legal?.type === 'Vote' ? 'Your vote is public and final.' : 'Your choice is private.' : canSpeak ? 'Speak in the chat. Click a guest to address them directly.' : waiting}</p>
-            </div>{game.status === 'FINISHED' ? <button class="primary" disabled={busy} onClick={() => void start()}>New game ↗</button> : <div class="table-actions"><button class="quiet" disabled={busy} onClick={() => void control(running ? 'pause' : 'resume')}>{running ? 'Pause game' : 'Resume game'}</button><button class="quiet leave" disabled={busy} onClick={() => void control('leave')}>Leave table</button></div>}</div>
-            {canChoose && <div class="action-row"><span>{targets.length ? targets.map(id => players.find(p => p.id === id)?.name).join(' + ') : 'Select at the table or below'} <small>({targets.length}/{legal!.count})</small></span><button class="primary" disabled={busy || targets.length !== legal!.count} onClick={() => void action(legal!.type)}>{ACTIONS[legal!.type]}</button>{game.legal.some(a => a.type === 'SkipAbility') && <button class="quiet" disabled={busy} onClick={() => void action('SkipAbility')}>Skip tonight</button>}</div>}
-            <details class="table-details"><summary>Players &amp; private information</summary><div class="player-roster" aria-label="Players and legal targets">{game.players.map(p => <button key={p.id} class={`roster-player ${!p.alive ? 'eliminated' : ''} ${selected.includes(p.id) ? 'selected' : ''} ${eligible.includes(p.id) ? 'eligible' : ''}`} disabled={!eligible.includes(p.id)} onClick={() => choose(p.id)} aria-label={`${p.name}${!p.alive ? ', eliminated' : ''}${p.role ? ', ' + p.role : ''}`} aria-pressed={selected.includes(p.id)}><span class="seat-dot"/><span>{p.human ? 'You' : p.name}<small>{!p.alive ? 'Eliminated' : p.role || (game.nominees.includes(p.id) ? 'Nominated' : 'At the table')}</small></span></button>)}</div>
+              <h2>{game.status === 'FINISHED' ? `${game.winner} wins.` : game.status === 'PAUSED' ? 'Game paused.' : game.spectator ? 'Spectating.' : canChoose ? legal?.count === 2 ? 'Nominate two different players.' : 'Choose a player.' : canSpeak ? game.activeSpeaker ? 'Your defense.' : 'Discussion.' : game.ownNomination && game.phase === 'NOMINATIONS' ? 'Nominations submitted.' : game.votes[game.self] && game.phase === 'VOTE' ? 'Vote submitted.' : 'Waiting.'}</h2>
+              <p>{game.spectator ? 'You can see all roles.' : canChoose ? legal?.type === 'Point' ? 'Only Mafia see your target. You can revise it until dawn.' : legal?.type === 'Vote' ? 'Your vote is public and final.' : 'Your choice is private.' : canSpeak ? 'Click a player to address them in chat.' : waiting}</p>
+            </div>{game.status === 'FINISHED' ? <button class="primary" disabled={busy} onClick={() => void start()}>New game</button> : <div class="table-actions"><button class="quiet" disabled={busy} onClick={() => void control(running ? 'pause' : 'resume')}>{running ? 'Pause game' : 'Resume game'}</button><button class="quiet leave" disabled={busy} onClick={() => void control('leave')}>Leave game</button></div>}</div>
+            {canChoose && <div class="action-row"><span>{targets.length ? targets.map(id => players.find(p => p.id === id)?.name).join(' + ') : 'Select a player or use the player list'} <small>({targets.length}/{legal!.count})</small></span><button class="primary" disabled={busy || targets.length !== legal!.count} onClick={() => void action(legal!.type)}>{ACTIONS[legal!.type]}</button>{game.legal.some(a => a.type === 'SkipAbility') && <button class="quiet" disabled={busy} onClick={() => void action('SkipAbility')}>Skip tonight</button>}</div>}
+            <details class="table-details"><summary>Players &amp; private information</summary><div class="player-roster" aria-label="Players and legal targets">{game.players.map(p => <button key={p.id} class={`roster-player ${!p.alive ? 'eliminated' : ''} ${selected.includes(p.id) ? 'selected' : ''} ${eligible.includes(p.id) ? 'eligible' : ''}`} disabled={!eligible.includes(p.id)} onClick={() => choose(p.id)} aria-label={`${p.name}${!p.alive ? ', eliminated' : ''}${p.role ? ', ' + p.role : ''}`} aria-pressed={selected.includes(p.id)}><span class="seat-dot"/><span>{p.human ? 'You' : p.name}<small>{!p.alive ? 'Eliminated' : p.role || (game.nominees.includes(p.id) ? 'Nominated' : 'Active')}</small></span></button>)}</div>
             {(Object.keys(game.investigations || {}).length > 0 || Object.keys(game.pointers || {}).length > 0 || game.protection) && <div class="private-knowledge"><span>YOUR PRIVATE INFORMATION</span>{Object.entries(game.investigations || {}).map(([id, role]) => <p key={id}>{players.find(p => p.id === id)?.name}: {role}</p>)}{Object.entries(game.pointers || {}).map(([id, target]) => <p key={id}>{players.find(p => p.id === id)?.name} → {players.find(p => p.id === target)?.name}</p>)}{game.protection && <p>Protected: {players.find(p => p.id === game.protection)?.name}</p>}</div>}
             </details>
           </>}
         </div>
       </section>
       <aside class="chat-panel" aria-label="Live game chat">
-        <header class="chat-heading"><div><span class="eyebrow">EVERY WORD COUNTS</span><h2>At the table</h2></div><span class={`connection ${game && online ? 'connected' : ''}`}>{game ? online ? 'Live' : 'Reconnecting' : 'Waiting'}</span></header>
+        <header class="chat-heading"><h2>Chat</h2>{game && <span class={`connection ${online ? 'connected' : ''}`}>{online ? 'Connected' : 'Reconnecting'}</span>}</header>
         <div class="messages" ref={log} role="log" aria-label="Game conversation" aria-live="polite" onScroll={() => { const p = log.current; if (p) stickToBottom.current = p.scrollHeight - p.scrollTop - p.clientHeight < 70; }}>
-          {!events.length && <div class="empty-chat"><span aria-hidden="true">♣</span><h3>Keep your friends close.</h3><p>Accusations, alibis, and a few very convincing lies.<br/>The conversation appears here when your game begins.</p></div>}
           {events.map(e => {
             const p = game?.players.find(p => p.id === e.actor);
-            if (e.type !== 'SpeechPublished') return <article class="moderator-message" key={e.seq}><span>THE DEALER · ROUND {e.round}</span><p>{e.text}</p></article>;
+            if (e.type !== 'SpeechPublished') return <article class="moderator-message" key={e.seq}><span>GAME · ROUND {e.round}</span><p>{e.type === 'GameCreated' ? 'Game started.' : e.text}</p></article>;
             const meta = e.data as { addressedTo?: string | null; replyTo?: number | null } | undefined;
             const recipient = players.find(p => p.id === meta?.addressedTo);
             return <article class={`chat-message ${p?.human ? 'own-message' : ''}`} key={e.seq}>
               <div class="message-byline"><span class="avatar-initials" aria-hidden="true">{p?.human ? 'Y' : p?.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</span><strong>{p?.human ? 'You' : p?.name || 'Player'}</strong><small>R{e.round}</small></div>
               {recipient && <div class="message-recipient">To {recipient.human ? 'you' : recipient.name}</div>}
               <p>{e.text}</p>
-              {canSpeak && p?.alive && !p.human && <button class="reply-button" onClick={() => replyTo(e)} aria-label={`Reply to ${p.name}`}>Reply ↗</button>}
+              {canSpeak && p?.alive && !p.human && <button class="reply-button" onClick={() => replyTo(e)} aria-label={`Reply to ${p.name}`}>Reply</button>}
             </article>;
           })}
         </div>
         <form class="chat-composer" onSubmit={e => { e.preventDefault(); if (canSpeak && message.trim() && !busy) void action('Speak'); }}>
           {reply && canSpeak && <div class="reply-to">To {players.find(p => p.id === reply.playerId)?.name}<button type="button" aria-label="Speak to the whole table instead" onClick={() => setReply(null)}>×</button></div>}
-          <label class="sr-only" for="speech">Your message</label><textarea id="speech" ref={composer} value={message} maxLength={600} disabled={!canSpeak || busy} placeholder={canSpeak ? 'Make your case…' : waiting} onInput={e => setMessage(e.currentTarget.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (canSpeak && message.trim() && !busy) void action('Speak'); } }}/>
-          <div class="composer-footer"><span>{canSpeak ? `${message.length}/600 · Enter to send` : game ? PHASES[game.phase] : 'Your voice belongs here.'}</span><button class="send-button" type="submit" disabled={!canSpeak || busy || !message.trim()} aria-label="Send message">↑</button></div>
+          <label class="sr-only" for="speech">Your message</label><textarea id="speech" ref={composer} value={message} maxLength={600} disabled={!canSpeak || busy} placeholder={canSpeak ? 'Message…' : waiting} onInput={e => setMessage(e.currentTarget.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (canSpeak && message.trim() && !busy) void action('Speak'); } }}/>
+          <div class="composer-footer"><span>{canSpeak ? `${message.length}/600 · Enter to send` : game ? PHASES[game.phase] : ''}</span><button class="send-button" type="submit" disabled={!canSpeak || busy || !message.trim()} aria-label="Send message">↑</button></div>
         </form>
       </aside>
     </main>
