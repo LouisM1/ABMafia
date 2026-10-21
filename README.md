@@ -32,7 +32,9 @@ All AI decisions and dialogue come from live OpenAI requests. There is no script
 - You receive a random secret role. Persona identity never determines role.
 - Three Mafia, one Angel, one Sheriff and seven Townspeople occupy twelve seats.
 - Night actions are private. Click a player to select a target, then submit.
-- During discussion, type in the conversation panel. Nominate two distinct players, hear their defenses, and vote publicly.
+- Click **Start game** to take the front seat as “You”, using quick nights and the configured model. No setup selectors are needed.
+- During discussion, type in the chat on the right. Click a living guest or a chat Reply button to address them; clearing the recipient sends to the table.
+- Click guests or their names below the room to choose legal night, nomination and voting targets, then confirm. Characters disappear only when the engine eliminates them; their chairs remain.
 - Eliminated players cannot act. If you die, you become an omniscient spectator.
 - Pause whenever needed. Missing required ballots pause play while preserving submitted choices.
 - Quick timing shortens night and ballot windows; discussion stays at 60 seconds and each defense at 15 seconds. Standard uses the specification's proposed night windows.
@@ -41,7 +43,7 @@ API errors pause the game with a message. Correct the key or account issue and r
 
 ## Conversation turns
 
-Use **To** beside the input to address a living player. With Table selected, a single unambiguous name routes your message automatically; “Ryan” alone remains addressed to the table. Explicit player selection takes precedence over names in the text.
+Click a living guest during discussion, or Reply beneath their message, to address them. Without an explicit recipient, a single unambiguous name routes your message automatically; “Ryan” alone remains addressed to the table. Explicit player selection takes precedence over names in the text.
 
 Only one AI speech request runs per game. Direct questions get priority, with fair opportunities for the rest of the table and a break after two directed replies. Each request sees the latest 40 public speeches (with IDs and names), any older referenced speech, and separately supplied authorized engine facts. Replies normally aim for one or two sentences; the existing 600-character limit remains.
 
@@ -77,7 +79,7 @@ npm run build
 
 `npm run dev` builds the client once and watches the server. Rebuild and restart after client edits.
 
-This first version uses CSS pixel-style avatars and a responsive table. The supplied PNG remains a visual reference; it has not been sliced into production sprites. There is no hosted deployment, multiplayer, voice, or local LLM download.
+The main game uses the supplied room, table, chair and character PNG layers. `client/lounge-assets.ts` shares the art coordinates with the toy demo; `client/lounge.tsx` maps engine seats to those visuals, with the human at the centre foreground. Art assignments are positional stand-ins, not inferred identities. The room scrolls horizontally on narrow screens so guests are never cropped out of reach. There is no hosted deployment, multiplayer, voice, or local LLM download.
 
 The OpenAI adapter has automated mocked-response coverage. A live API smoke test requires your key; no paid calls are made during tests.
 
