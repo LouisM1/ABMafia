@@ -27,7 +27,6 @@ function App() {
   const [now, setNow] = useState(Date.now());
   const [offset, setOffset] = useState(0);
   const [online, setOnline] = useState(true);
-  const [speaker, setSpeaker] = useState<string>();
   const log = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const stickToBottom = useRef(true);
@@ -58,11 +57,6 @@ function App() {
   }, [game?.id]);
   useEffect(() => { setTargets([]); setMessage(''); setReply(null); stickToBottom.current = true; }, [game?.id, game?.phaseId]);
   const lastSpeech = game?.events.filter(e => e.type === 'SpeechPublished').at(-1);
-  useEffect(() => {
-    setSpeaker(lastSpeech?.actor);
-    const timeout = setTimeout(() => setSpeaker(undefined), 4000);
-    return () => clearTimeout(timeout);
-  }, [game?.id, lastSpeech?.seq]);
   useEffect(() => { if (log.current && stickToBottom.current) log.current.scrollTop = log.current.scrollHeight; }, [game?.events.length]);
   useEffect(() => { if (reply && !game?.players.some(p => p.id === reply.playerId && p.alive)) setReply(null); }, [game?.players, reply]);
   async function attempt(fn: () => Promise<void>) {
@@ -128,7 +122,7 @@ function App() {
     <main class="game-layout">
       <section class="play-area" aria-label="Mafia game table">
         <div class="scene-wrap">
-          <Lounge players={players} selected={selected} eligible={eligible} speaking={running ? game?.activeSpeaker || speaker : undefined} night={night} onChoose={choose}/>
+          <Lounge players={players} selected={selected} eligible={eligible} lastSpeaker={lastSpeech?.actor} night={night} onChoose={choose}/>
           {game ? <div class="scene-heading">
             <div class="scene-eyebrow">ROUND {game.round} · {players.filter(p => p.alive).length} PLAYERS</div>
             <h1>{game.winner ? `${game.winner} wins.` : PHASES[game.phase]}</h1>
