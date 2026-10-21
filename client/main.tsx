@@ -122,13 +122,6 @@ function App() {
   const waiting = !game ? 'Start a game to join the conversation.' : game.status === 'FINISHED' ? 'The game is over.' : game.status === 'PAUSED' ? 'Resume the game to continue.' : game.spectator ? 'You’re watching as a spectator.' : night ? 'Night falls. The table is silent.' : speakerName ? `${speakerName} has the floor.` : game.phase === 'NOMINATIONS' ? 'Choose two players to nominate.' : game.phase === 'VOTE' ? 'Cast your vote at the table.' : 'Waiting for the table…';
   const events = game?.events.filter(e => PUBLIC_EVENTS.has(e.type)) ?? [];
   return <div class="app-shell">
-    <header class="topbar">
-      <a href="/" class="brand" aria-label="ABMafia home"><span class="brand-mark">♠</span><span>ABMAFIA</span></a>
-      <span class="edition">THE PRIVATE TABLE</span>
-      <div class="top-actions">
-        {game && game.status !== 'FINISHED' ? <><button class="quiet" disabled={busy} onClick={() => void control(running ? 'pause' : 'resume')}>{running ? 'Pause game' : 'Resume game'}</button><button class="quiet leave" disabled={busy} onClick={() => void control('leave')}>Leave table</button></> : <span class="header-note">One human. Eleven AI. Three liars.</span>}
-      </div>
-    </header>
     {error && <div role="alert" class="notice error">{error}<button onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
     {!online && game && <div role="status" class="notice">Reconnecting to the table. Your accepted actions are saved.</div>}
     {game?.status === 'PAUSED' && <div role="status" class="notice">{game.pauseReason}<button disabled={busy} onClick={() => void control('resume')}>Resume ↗</button></div>}
@@ -149,7 +142,7 @@ function App() {
             <div class="role-line"><span class={`role-card ${self?.role === 'Mafia' ? 'mafia' : ''}`}><small>{game.spectator ? 'SPECTATOR · YOUR ROLE' : 'YOUR SECRET ROLE'}</small><strong>{self?.role}</strong></span><div class="phase-instructions">
               <h2>{game.status === 'FINISHED' ? `${game.winner} takes the table.` : game.status === 'PAUSED' ? 'The table is paused.' : game.spectator ? 'Watch the surviving players.' : canChoose ? legal?.count === 2 ? 'Nominate two different players.' : 'Choose a player.' : canSpeak ? game.activeSpeaker ? 'Your defense. Make it count.' : 'The floor is open.' : game.ownNomination && game.phase === 'NOMINATIONS' ? 'Nominations submitted.' : game.votes[game.self] && game.phase === 'VOTE' ? 'Your vote is in.' : 'Read the room.'}</h2>
               <p>{game.spectator ? 'All roles are revealed to you. Living players keep their own private knowledge.' : canChoose ? legal?.type === 'Point' ? 'Only Mafia see your target. You can revise it until dawn.' : legal?.type === 'Vote' ? 'Your vote is public and final.' : 'Your choice is private.' : canSpeak ? 'Speak in the chat. Click a guest to address them directly.' : waiting}</p>
-            </div>{game.status === 'FINISHED' && <button class="primary" disabled={busy} onClick={() => void start()}>New game ↗</button>}</div>
+            </div>{game.status === 'FINISHED' ? <button class="primary" disabled={busy} onClick={() => void start()}>New game ↗</button> : <div class="table-actions"><button class="quiet" disabled={busy} onClick={() => void control(running ? 'pause' : 'resume')}>{running ? 'Pause game' : 'Resume game'}</button><button class="quiet leave" disabled={busy} onClick={() => void control('leave')}>Leave table</button></div>}</div>
             {canChoose && <div class="action-row"><span>{targets.length ? targets.map(id => players.find(p => p.id === id)?.name).join(' + ') : 'Select at the table or below'} <small>({targets.length}/{legal!.count})</small></span><button class="primary" disabled={busy || targets.length !== legal!.count} onClick={() => void action(legal!.type)}>{ACTIONS[legal!.type]}</button>{game.legal.some(a => a.type === 'SkipAbility') && <button class="quiet" disabled={busy} onClick={() => void action('SkipAbility')}>Skip tonight</button>}</div>}
             <div class="player-roster" aria-label="Players and legal targets">{game.players.map(p => <button key={p.id} class={`roster-player ${!p.alive ? 'eliminated' : ''} ${selected.includes(p.id) ? 'selected' : ''} ${eligible.includes(p.id) ? 'eligible' : ''}`} disabled={!eligible.includes(p.id)} onClick={() => choose(p.id)} aria-label={`${p.name}${!p.alive ? ', eliminated' : ''}${p.role ? ', ' + p.role : ''}`} aria-pressed={selected.includes(p.id)}><span class="seat-dot"/><span>{p.human ? 'You' : p.name}<small>{!p.alive ? 'Eliminated' : p.role || (game.nominees.includes(p.id) ? 'Nominated' : 'At the table')}</small></span></button>)}</div>
             {(Object.keys(game.investigations || {}).length > 0 || Object.keys(game.pointers || {}).length > 0 || game.protection) && <div class="private-knowledge"><span>YOUR PRIVATE INFORMATION</span>{Object.entries(game.investigations || {}).map(([id, role]) => <p key={id}>{players.find(p => p.id === id)?.name}: {role}</p>)}{Object.entries(game.pointers || {}).map(([id, target]) => <p key={id}>{players.find(p => p.id === id)?.name} → {players.find(p => p.id === target)?.name}</p>)}{game.protection && <p>Protected: {players.find(p => p.id === game.protection)?.name}</p>}</div>}
@@ -180,7 +173,6 @@ function App() {
         </form>
       </aside>
     </main>
-    <footer class="site-footer"><span>ABMAFIA · A GAME OF IMPERFECT INFORMATION</span><span>Fictional AI portrayals · Your seat: Moxie</span></footer>
   </div>;
 }
 render(<App/>, document.getElementById('app')!);
