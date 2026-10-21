@@ -1,10 +1,9 @@
 import type { View } from '../shared/types';
 import { W, H, seats, asset } from './lounge-assets';
 
-export type ScenePlayer = Pick<View['players'][number], 'id' | 'name' | 'seat' | 'alive' | 'human'>;
-// The human always faces into the room from the centre foreground. Other art is
-// assigned by stable engine seat, not guessed from the likeness of an image.
-export const visualSeats = [6, 0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11];
+export type ScenePlayer = Pick<View['players'][number], 'id' | 'name' | 'personaId' | 'alive' | 'human'>;
+// Match identity rather than roster order, including games saved before the art mapping.
+// The human occupies Moxie’s centre-foreground seat and remains labelled “You”.
 export function Lounge({ players, selected, eligible, speaking, night, onChoose }: {
   players: ScenePlayer[]; selected: string[]; eligible: string[]; speaking?: string; night: boolean; onChoose: (id: string) => void;
 }) {
@@ -15,7 +14,7 @@ export function Lounge({ players, selected, eligible, speaking, night, onChoose 
       <img class="scenery table" src={asset('lounge/table')} alt=""/>
       <img class="scenery chairs" src={asset('lounge/chairs')} alt=""/>
       {players.filter(p => p.alive).map(p => {
-        const s = seats[visualSeats[p.seat]];
+        const s = seats.find(s => s.personaId === (p.human ? 'moxie_marlinspike' : p.personaId));
         if (!s) return null;
         const [x, y, w, h] = s.box;
         return <button key={p.id} type="button" class={`scene-player ${selected.includes(p.id) ? 'chosen' : ''} ${speaking === p.id ? 'has-floor' : ''} ${eligible.includes(p.id) ? 'available' : ''}`}

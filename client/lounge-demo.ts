@@ -1,6 +1,7 @@
 import './lounge-demo.css';
 
-import { W, H, seats, asset } from './lounge-assets';
+import { W, H, seats as spriteSeats, asset } from './lounge-assets';
+const seats = spriteSeats.map(s => s.personaId === 'moxie_marlinspike' ? { ...s, name: 'You' } : s);
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 for (const [id, file] of [['room', 'room'], ['table', 'table'], ['chairs', 'chairs'], ['chair-fronts', 'chair-backs']]) {
   $<HTMLImageElement>(id).src = asset(`lounge/${file}`);

@@ -79,7 +79,7 @@ npm run build
 
 `npm run dev` builds the client once and watches the server. Rebuild and restart after client edits.
 
-The main game uses the supplied room, table, chair and character PNG layers. `client/lounge-assets.ts` shares the art coordinates with the toy demo; `client/lounge.tsx` maps engine seats to those visuals, with the human at the centre foreground. Art assignments are positional stand-ins, not inferred identities. The room scrolls horizontally on narrow screens so guests are never cropped out of reach. There is no hosted deployment, multiplayer, voice, or local LLM download.
+The main game uses the supplied room, table, chair and character PNG layers. `client/lounge-assets.ts` shares the art coordinates with the toy demo; `client/lounge.tsx` matches sprites by persona ID, so roster ordering and saved games keep the correct likeness. Sprite filenames use the person’s name. Clockwise from the top: Palmer Luckey, Ryan Beiermeister, Tim Urban, Sam Altman, Ryan Petersen, Josie Zayner, Moxie Marlinspike (the human, labelled “You”), Liv Boeree, Trae Stephens, Dylan Field, Bryan Johnson, Cyan Banister. The room scrolls horizontally on narrow screens so guests are never cropped out of reach. There is no hosted deployment, multiplayer, voice, or local LLM download.
 
 The OpenAI adapter has automated mocked-response coverage. A live API smoke test requires your key; no paid calls are made during tests.
 

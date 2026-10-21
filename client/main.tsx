@@ -99,7 +99,7 @@ function App() {
       if (type === 'Speak') composer.current?.focus();
     });
   }
-  const players = game?.players ?? [{ id: 'p0', name: 'You', seat: 0, human: true, alive: true }, ...(session?.players ?? []).map((p, i) => ({ ...p, id: `p${i + 1}`, seat: i + 1, human: false, alive: true }))];
+  const players = game?.players ?? [{ id: 'p0', personaId: 'human', name: 'You', seat: 0, human: true, alive: true }, ...(session?.players ?? []).map((p, i) => ({ ...p, personaId: p.id, id: `p${i + 1}`, seat: i + 1, human: false, alive: true }))];
   const legal = game?.legal[0];
   const running = game?.status === 'RUNNING';
   const canSpeak = !!(running && online && legal?.type === 'Speak');
@@ -180,7 +180,7 @@ function App() {
         </form>
       </aside>
     </main>
-    <footer class="site-footer"><span>ABMAFIA · A GAME OF IMPERFECT INFORMATION</span><span>Fictional AI portrayals · Art avatars assigned by seat</span></footer>
+    <footer class="site-footer"><span>ABMAFIA · A GAME OF IMPERFECT INFORMATION</span><span>Fictional AI portrayals · Your seat: Moxie</span></footer>
   </div>;
 }
 render(<App/>, document.getElementById('app')!);
