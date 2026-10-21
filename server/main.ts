@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { debugEnabled, debugLog } from './logging.js';
 import { loadEnvFile } from 'node:process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -36,6 +37,7 @@ function owned(id: string, session: string) {
   return g;
 }
 function send(g: Game) {
+  if (streams.get(g.id)?.size) debugLog('SERVER → LIVE UPDATE', { gameId: g.id, version: g.version, phase: g.phase, status: g.status, clients: streams.get(g.id)!.size });
   const payload = `data: ${JSON.stringify(playerView(g, 'p0'))}\n\n`;
   for (const stream of streams.get(g.id) || []) {
     if (stream.destroyed || stream.writableLength > 1_000_000) { stream.end(); continue; }
@@ -45,12 +47,15 @@ function send(g: Game) {
 function commit(g: Game, fn: (draft: Game) => void) {
   const draft = structuredClone(g); fn(draft); draft.version++;
   if (draft.status === 'RUNNING') draft.remaining = Math.max(0, draft.deadline - Date.now());
-  storage.save(draft); games.set(draft.id, draft); send(draft); return draft;
+  storage.save(draft); games.set(draft.id, draft);
+  for (const event of draft.events.slice(g.events.length)) debugLog('GAME · EVENT', { gameId: g.id, ...event });
+  send(draft); return draft;
 }
 function stopRequests(id: string) {
   for (const [key, ctrl] of pending) if (key.startsWith(id + ':')) ctrl.abort();
 }
 app.addHook('onRequest', async (request, reply) => {
+  if (request.url.split('?')[0] !== '/api/client-log') debugLog('BROWSER → REQUEST', { requestId: request.id, method: request.method, path: request.url.split('?')[0] });
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('Referrer-Policy', 'same-origin');
   reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'");
@@ -69,16 +74,50 @@ app.addHook('onRequest', async (request, reply) => {
   }
   request.session = token;
 });
-app.setErrorHandler((error, _request, reply) => {
+app.addHook('preValidation', async request => {
+  if (request.url.split('?')[0] !== '/api/client-log' && request.body !== undefined)
+    debugLog('BROWSER → BODY', { requestId: request.id, body: request.body });
+});
+app.addHook('onSend', async (request, reply, payload) => {
+  if (debugEnabled() && request.url.startsWith('/api/') && request.url.split('?')[0] !== '/api/client-log') {
+    let body: unknown = payload;
+    if (typeof payload === 'string') { try { body = JSON.parse(payload); } catch { /* Preserve text errors. */ } }
+    debugLog('SERVER → RESPONSE', { requestId: request.id, status: reply.statusCode, durationMs: Math.round(reply.elapsedTime), body });
+  }
+  return payload;
+});
+app.addHook('onResponse', async (request, reply) => {
+  if (!request.url.startsWith('/api/')) debugLog('SERVER → RESPONSE', { requestId: request.id, status: reply.statusCode, durationMs: Math.round(reply.elapsedTime) });
+});
+app.setErrorHandler((error, request, reply) => {
+  debugLog('SERVER × ERROR', { requestId: request.id, error });
   const validation = error instanceof Error && 'validation' in error;
   reply.code(error instanceof RuleError || validation ? 400 : 500)
     .send({ error: error instanceof RuleError ? error.message : validation ? 'Invalid request.' : 'The server could not complete that request.' });
 });
 app.get('/api/session', async request => ({
-  connected: !!OPENAI_API_KEY, model: MODEL,
+  debug: debugEnabled(), connected: !!OPENAI_API_KEY, model: MODEL,
   players: personas.map(p => ({ id: p.id, name: p.name })),
   game: latest(request.session) ? playerView(latest(request.session)!, 'p0') : null,
 }));
+// Only active in debug mode; bounded per browser session to avoid telemetry floods.
+const clientLogRates = new Map<string, { count: number; until: number }>();
+app.post<{ Body: { event: string; message: string } }>('/api/client-log', {
+  schema: { body: { type: 'object', additionalProperties: false, required: ['event','message'], properties: {
+    event: { type: 'string', maxLength: 80 }, message: { type: 'string', maxLength: 4000 },
+  } } },
+}, async (request, reply) => {
+  if (!debugEnabled()) return reply.code(204).send();
+  const now = Date.now();
+  for (const [session, rate] of clientLogRates) if (rate.until <= now) clientLogRates.delete(session);
+  const rate = clientLogRates.get(request.session) || { count: 0, until: now + 10_000 };
+  clientLogRates.set(request.session, rate);
+  if (++rate.count > 10) return reply.code(429).send({ error: 'Diagnostic rate limit.' });
+  let details: unknown = request.body.message;
+  try { details = JSON.parse(request.body.message); } catch { /* Bounded text diagnostic. */ }
+  debugLog('BROWSER · DIAGNOSTIC', { event: request.body.event, details });
+  return reply.code(204).send();
+});
 app.post<{ Body: { name: string; speed: 'standard' | 'quick' } }>('/api/games', {
   schema: { body: { type: 'object', additionalProperties: false, required: ['name', 'speed'], properties: {
     name: { type: 'string', minLength: 1, maxLength: 30 }, speed: { enum: ['standard', 'quick'] },
@@ -88,17 +127,20 @@ app.post<{ Body: { name: string; speed: 'standard' | 'quick' } }>('/api/games', 
   const old = latest(request.session);
   if (old && ['RUNNING', 'PAUSED'].includes(old.status)) throw new RuleError('Leave the current game before starting another.');
   const g = createGame(request.session, personas, request.body.name, request.body.speed, MODEL);
-  storage.save(g); games.set(g.id, g); return playerView(g, 'p0');
+  storage.save(g); games.set(g.id, g);
+  for (const event of g.events) debugLog('GAME · EVENT', { gameId: g.id, ...event });
+  return playerView(g, 'p0');
 });
 app.get<{ Params: { id: string } }>('/api/games/:id', async request => playerView(owned(request.params.id, request.session), 'p0'));
 app.get<{ Params: { id: string } }>('/api/games/:id/events', async (request, reply) => {
   const g = owned(request.params.id, request.session);
+  debugLog('SERVER → STREAM OPEN', { requestId: request.id, gameId: g.id, version: g.version, status: 200 });
   reply.hijack();
   reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   const set = streams.get(g.id) || new Set<ServerResponse>(); streams.set(g.id, set); set.add(reply.raw);
   reply.raw.write(`data: ${JSON.stringify(playerView(g, 'p0'))}\n\n`);
   const heartbeat = setInterval(() => reply.raw.write(': heartbeat\n\n'), 15_000);
-  request.raw.on('close', () => { clearInterval(heartbeat); set.delete(reply.raw); });
+  reply.raw.on('close', () => { clearInterval(heartbeat); set.delete(reply.raw); debugLog('SERVER · STREAM CLOSED', { requestId: request.id, gameId: g.id }); });
 });
 app.post<{ Params: { id: string }; Body: Command }>('/api/games/:id/actions', {
   schema: { body: { type: 'object', additionalProperties: false, required: ['commandId', 'phaseId', 'type'], properties: {
@@ -132,6 +174,8 @@ app.post<{ Params: { id: string }; Body: { operation: 'pause' | 'resume' | 'leav
 });
 
 async function runAI(g: Game, playerId: string, type: Action['type'], taskKey: string) {
+  const requestId = randomUUID();
+  const trace = { requestId, gameId: g.id, player: g.players.find(p => p.id === playerId)!.name, phase: g.phase, action: type };
   const ctrl = new AbortController(); pending.set(taskKey, ctrl);
   const timeout = setTimeout(() => ctrl.abort(), Math.min(15_000, Math.max(100, g.deadline - Date.now() - 100)));
   try {
@@ -140,13 +184,17 @@ async function runAI(g: Game, playerId: string, type: Action['type'], taskKey: s
     g = commit(games.get(g.id)!, d => { d.aiCalls++; });
     const view = playerView(g, playerId);
     const persona = g.personas[g.players.find(p => p.id === playerId)!.personaId];
-    const action = await openaiAction(OPENAI_API_KEY, g.model, persona, view, type, ctrl.signal);
+    const action = await openaiAction(OPENAI_API_KEY, g.model, persona, view, type, ctrl.signal, fetch, requestId);
     const current = games.get(g.id)!;
-    if (ctrl.signal.aborted || current.status !== 'RUNNING' || current.phaseId !== g.phaseId || Date.now() >= current.deadline) return;
+    if (ctrl.signal.aborted || current.status !== 'RUNNING' || current.phaseId !== g.phaseId || Date.now() >= current.deadline) {
+      debugLog('GAME · AI RESULT DISCARDED', { ...trace, reason: 'Cancelled, paused, or phase deadline passed.' }); return;
+    }
     commit(current, draft => accept(draft, playerId, { ...action, commandId: randomUUID(), phaseId: g.phaseId }, Date.now()));
+    debugLog('GAME ✓ AI ACTION ACCEPTED', { ...trace, result: action });
     performed.set(taskKey, (performed.get(taskKey) || 0) + 1);
     if (type === 'Speak') { lastSpeech.set(g.id, Date.now()); lastSpeech.set(`${g.id}:${playerId}`, Date.now()); }
   } catch (error) {
+    debugLog('GAME × AI ACTION FAILED', { ...trace, cancelled: ctrl.signal.aborted, error });
     const current = games.get(g.id)!;
     if (current.status !== 'RUNNING' || current.phaseId !== g.phaseId || ctrl.signal.aborted) return;
     const message = error instanceof RuleError ? 'An AI response was not a legal action. Resume to retry.' :
@@ -188,7 +236,7 @@ const interval = setInterval(() => {
       schedule(games.get(g.id)!);
     }
     if (Date.now() - checkpoint > 1000) checkpoint = Date.now();
-  } catch { console.error('Game runner stopped a tick after a storage or engine error.'); }
+  } catch (error) { debugLog('SERVER × RUNNER ERROR', { error }); console.error('Game runner stopped a tick after a storage or engine error.'); }
 }, 200);
 
 // Serve only the build's enumerated files. No arbitrary filesystem path or directory listing.
@@ -204,7 +252,10 @@ app.get<{ Params: { name: string } }>('/assets/:name', async (request, reply) =>
 });
 await app.listen({ port: PORT, host: '127.0.0.1' });
 console.log(`ABMafia is ready at http://127.0.0.1:${PORT}`);
+if (debugEnabled()) console.log('Live terminal logging ON: browser requests, game secrets, and full OpenAI prompts/responses. API keys and session credentials are redacted.');
+debugLog('SERVER · READY', { model: MODEL, keyLoaded: !!OPENAI_API_KEY, gamesRecovered: games.size });
 async function shutdown() {
+  debugLog('SERVER · STOPPING');
   clearInterval(interval);
   for (const g of games.values()) {
     stopRequests(g.id);

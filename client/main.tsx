@@ -2,10 +2,11 @@ import { render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Action, View } from '../shared/types';
 import './style.css';
+import { enableClientDebug, reportClient } from './diagnostics';
 
 const PHASES: Record<string, string> = { MAFIA: 'Mafia coordination', ANGEL: 'Angel protection', SHERIFF: 'Sheriff investigation', DISCUSSION: 'Table discussion', NOMINATIONS: 'Secret nominations', DEFENSE_1: 'First defense', DEFENSE_2: 'Second defense', VOTE: 'Elimination vote' };
 const COLORS = ['#d6b46e','#ae8baf','#87a7a2','#bb916c','#87a090','#b39e83','#bd8080','#919eb2','#bab282','#8d9d6b','#a19080','#bc9d76'];
-type Session = { connected: boolean; model: string; players: { id: string; name: string }[]; game: View | null };
+type Session = { debug: boolean; connected: boolean; model: string; players: { id: string; name: string }[]; game: View | null };
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(`/api${path}`, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await r.json();
@@ -33,13 +34,14 @@ function App() {
     setGame(previous => previous && previous.id === v.id && previous.version > v.version ? previous : v);
     setOffset(v.serverNow - Date.now());
   }
-  useEffect(() => { api<Session>('/session').then(s => { setSession(s); if (s.game && s.game.status !== 'ABANDONED') receive(s.game); }).catch(e => setError(e.message)); }, []);
+  useEffect(() => { api<Session>('/session').then(s => { enableClientDebug(s.debug); setSession(s); if (s.game && s.game.status !== 'ABANDONED') receive(s.game); }).catch(e => setError(e.message)); }, []);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 250); return () => clearInterval(timer); }, []);
   useEffect(() => {
     if (!game?.id) return;
     const stream = new EventSource(`/api/games/${game.id}/events`);
+    stream.onopen = () => reportClient('stream-connected', { gameId: game.id });
     stream.onmessage = event => { receive(JSON.parse(event.data)); setOnline(true); };
-    stream.onerror = () => setOnline(false);
+    stream.onerror = () => { setOnline(false); reportClient('stream-reconnecting', { gameId: game.id }); };
     return () => stream.close();
   }, [game?.id]);
   useEffect(() => { setTargets([]); setMessage(''); }, [game?.phaseId]);
@@ -48,7 +50,7 @@ function App() {
     if (panel) panel.scrollTop = panel.scrollHeight;
   }, [game?.events.length]);
   async function attempt(fn: () => Promise<void>) {
-    setBusy(true); setError(''); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Something went wrong.'); } finally { setBusy(false); }
+    setBusy(true); setError(''); try { await fn(); } catch (e) { reportClient('action-error', { error: e }); setError(e instanceof Error ? e.message : 'Something went wrong.'); } finally { setBusy(false); }
   }
   async function start() {
     await attempt(async () => {

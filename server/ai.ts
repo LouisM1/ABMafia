@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { debugLog } from './logging.js';
 import type { Action, PersonaPrompt, View } from '../shared/types.js';
 
 export const MODEL = 'gpt-6-luna';
@@ -39,26 +41,44 @@ export function actionSchema(view: View, type: Action['type']) {
     required: ['type', 'targets', 'text'],
   };
 }
-export async function openaiAction(key: string, model: string, persona: PersonaPrompt, view: View, type: Action['type'], signal: AbortSignal, fetcher: typeof fetch = fetch): Promise<Action> {
-  const response = await fetcher('https://api.openai.com/v1/responses', {
-    method: 'POST', signal,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model, store: false, reasoning: { effort: 'none' }, max_output_tokens: 350,
-      instructions: `${PLAYER_RULES}\nPersona (fictional portrayal): ${JSON.stringify(persona)}\nUse the examples for style only, never as match history. For a non-Speak action, text MUST be an empty string.`,
-      input: JSON.stringify({ task: `Choose a ${type} action from the legal options.`, authorizedGameView: context(view) }),
-      text: { format: { type: 'json_schema', name: 'mafia_action', strict: true, schema: actionSchema(view, type) } },
-    }),
-  });
-  if (!response.ok) throw new Error(response.status === 401 ? 'OpenAI rejected the API key. Update OPENAI_API_KEY in .env and restart the server.' :
-    response.status === 429 ? 'OpenAI rate or credit limit reached. Check your account and resume.' :
-    `OpenAI request failed (${response.status}). Your game can be resumed.`);
-  const data = await response.json() as { status?: string; output?: { phase?: string; content?: { type: string; text?: string }[] }[] };
-  if (data.status !== 'completed') throw new Error('OpenAI did not finish its response. Resume to retry.');
-  // Some models emit commentary before the final JSON. Commentary is not a game action.
-  const messages = data.output || [];
-  const finals = messages.filter(x => x.phase === 'final_answer');
-  const answer = finals.length ? finals : messages.filter(x => !x.phase);
-  const text = answer.flatMap(x => x.content || []).filter(x => x.type === 'output_text').map(x => x.text).join('');
-  try { return JSON.parse(text) as Action; } catch { throw new Error('OpenAI returned no usable action. Resume to retry.'); }
+export async function openaiAction(key: string, model: string, persona: PersonaPrompt, view: View, type: Action['type'], signal: AbortSignal, fetcher: typeof fetch = fetch, requestId: string = randomUUID()): Promise<Action> {
+  const started = Date.now();
+  const trace = { requestId, gameId: view.id, player: persona.name, phase: view.phase, action: type, model };
+  const body = {
+    model, store: false, reasoning: { effort: 'none' }, max_output_tokens: 350,
+    instructions: `${PLAYER_RULES}\nPersona (fictional portrayal): ${JSON.stringify(persona)}\nUse the examples for style only, never as match history. For a non-Speak action, text MUST be an empty string.`,
+    input: JSON.stringify({ task: `Choose a ${type} action from the legal options.`, authorizedGameView: context(view) }),
+    text: { format: { type: 'json_schema', name: 'mafia_action', strict: true, schema: actionSchema(view, type) } },
+  };
+  debugLog('OPENAI → REQUEST', { ...trace, body: { ...body, input: JSON.parse(body.input) } });
+  try {
+    const response = await fetcher('https://api.openai.com/v1/responses', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify(body),
+    });
+    const raw = await response.text();
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { parsed = raw; }
+    debugLog('OPENAI ← RESPONSE', {
+      ...trace, status: response.status, durationMs: Date.now() - started,
+      providerRequestId: response.headers.get('x-request-id'), body: parsed,
+    });
+    if (!response.ok) throw new Error(response.status === 401 ? 'OpenAI rejected the API key. Update OPENAI_API_KEY in .env and restart the server.' :
+      response.status === 429 ? 'OpenAI rate or credit limit reached. Check your account and resume.' :
+      `OpenAI request failed (${response.status}). Your game can be resumed.`);
+    const data = parsed as { status?: string; output?: { phase?: string; content?: { type: string; text?: string }[] }[] };
+    if (!data || data.status !== 'completed') throw new Error('OpenAI did not finish its response. Resume to retry.');
+    // Some models emit commentary before the final JSON. Commentary is not a game action.
+    const messages = data.output || [];
+    const finals = messages.filter(x => x.phase === 'final_answer');
+    const answer = finals.length ? finals : messages.filter(x => !x.phase);
+    const text = answer.flatMap(x => x.content || []).filter(x => x.type === 'output_text').map(x => x.text).join('');
+    try { return JSON.parse(text) as Action; } catch { throw new Error('OpenAI returned no usable action. Resume to retry.'); }
+  } catch (error) {
+    debugLog(signal.aborted ? 'OPENAI × CANCELLED' : 'OPENAI × ERROR', {
+      ...trace, durationMs: Date.now() - started, error,
+    });
+    throw error;
+  }
 }

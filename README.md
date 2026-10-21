@@ -4,9 +4,10 @@ A local, playable Mafia game: you and the eleven personas in `personas/manifest.
 
 ## Start
 
-Use Node 20.18 or newer (an active Node LTS is recommended).
+Use the Node version recorded in `.nvmrc` for both installation and execution. With nvm, run `nvm use` in this folder first.
 
 ```sh
+nvm use
 npm ci
 npm run build
 npm start
@@ -68,3 +69,40 @@ npm run build
 This first version uses CSS pixel-style avatars and a responsive table. The supplied PNG remains a visual reference; it has not been sliced into production sprites. There is no hosted deployment, multiplayer, voice, or local LLM download.
 
 The OpenAI adapter has automated mocked-response coverage. A live API smoke test requires your key; no paid calls are made during tests.
+
+## Live terminal logs
+
+From the ABMafia folder in your VS Code terminal, run:
+
+```sh
+npm run debug
+```
+
+This builds the latest code, starts the server, and prints live diagnostics in that terminal. Open http://127.0.0.1:4317 and play. Stop another running copy with Ctrl+C first if the port is occupied. Ctrl+C also stops this debug session.
+
+- `BROWSER → REQUEST / BODY`: incoming browser requests and submitted actions, with request IDs.
+- `SERVER → RESPONSE`: API response bodies, status and elapsed milliseconds. Static assets log status only.
+- `SERVER → STREAM OPEN / LIVE UPDATE`: live connection and update summaries (game, phase, version, connected clients). Heartbeats and repeated full snapshots are omitted; game events are printed separately.
+- `BROWSER · DIAGNOSTIC`: browser startup, connection problems, caught action errors, runtime errors and unhandled promise rejections. This is best-effort forwarding while the server is reachable, not a mirror of arbitrary browser console output.
+- `OPENAI → REQUEST`: full prompt, persona, authorized game view, action schema and configured model before sending.
+- `OPENAI ← RESPONSE`: full response body, HTTP status, provider request ID, usage when returned, and elapsed milliseconds.
+- `OPENAI × ERROR / CANCELLED`: provider failures, invalid responses and cancellations.
+- `GAME`: phase changes, private actions, eliminations and whether an AI action was accepted, discarded or rejected.
+
+The same request ID joins each OpenAI request, response and engine result. Logs are printed only to the terminal; the app does not save log files. Keys and session credentials are redacted, but private roles and match decisions are intentionally visible for debugging.
+
+`npm start` remains quiet unless you set `DEBUG_AI=true` in `.env`. No new logging dependency is required. Browser error forwarding is enabled only in debug mode and limited to ten reports per ten seconds per session.
+
+## SQLite / Node version mismatch
+
+`better-sqlite3` contains a native module compiled for a particular Node version. Installing with one Node version and running with another can produce `NODE_MODULE_VERSION` / `ERR_DLOPEN_FAILED` errors.
+
+Use the project version, then rebuild the local SQLite dependency:
+
+```sh
+nvm use
+npm rebuild better-sqlite3
+npm run debug
+```
+
+Rebuild again if you intentionally change Node versions. This does not delete saved games or your `.env` file.
