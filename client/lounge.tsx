@@ -7,7 +7,7 @@ export type ScenePlayer = Pick<View['players'][number], 'id' | 'name' | 'persona
 export function Lounge({ players, selected, eligible, speaking, night, onChoose }: {
   players: ScenePlayer[]; selected: string[]; eligible: string[]; speaking?: string; night: boolean; onChoose: (id: string) => void;
 }) {
-  return <div class="room-scroll" tabIndex={0} aria-label="Lounge. On a small screen, scroll sideways to see every seat.">
+  return <div class="room-viewport" aria-label="Lounge">
     <div class={`lounge-scene ${night ? 'at-night' : ''}`}>
       <img class="scenery room" src={asset('lounge/room')} alt="A candlelit club lounge with twelve red chairs around a wooden table"/>
       <div class="room-shadow" aria-hidden="true"/>
