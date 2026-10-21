@@ -1,3 +1,5 @@
+import { ConversationController } from './conversation.js';
+import type { SpeechResult } from './conversation.js';
 import Fastify from 'fastify';
 import { debugEnabled, debugLog } from './logging.js';
 import { loadEnvFile } from 'node:process';
@@ -5,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { Storage } from './storage.js';
-import { accept, createGame, legalActions, living, pause, playerView, resume, RuleError, tick } from './engine.js';
+import { accept, createGame, emit, legalActions, living, pause, playerView, resume, RuleError, tick } from './engine.js';
 import { loadPersonas } from './personas.js';
 import { MODEL, openaiAction } from './ai.js';
 import type { Action, Command, Game, View } from '../shared/types.js';
@@ -23,7 +25,6 @@ const games = new Map(storage.recover(Date.now()).reverse().map(g => [g.id, g]))
 const streams = new Map<string, Set<ServerResponse>>();
 const pending = new Map<string, AbortController>();
 const performed = new Map<string, number>();
-const lastSpeech = new Map<string, number>();
 const speechTimes = new Map<string, number>();
 const app = Fastify({ logger: false, bodyLimit: 16_384 });
 const SESSION = 'abmafia_session';
@@ -52,6 +53,7 @@ function commit(g: Game, fn: (draft: Game) => void) {
   send(draft); return draft;
 }
 function stopRequests(id: string) {
+  conversation.cancel(id, 'game control or phase change');
   for (const [key, ctrl] of pending) if (key.startsWith(id + ':')) ctrl.abort();
 }
 app.addHook('onRequest', async (request, reply) => {
@@ -146,6 +148,7 @@ app.post<{ Params: { id: string }; Body: Command }>('/api/games/:id/actions', {
   schema: { body: { type: 'object', additionalProperties: false, required: ['commandId', 'phaseId', 'type'], properties: {
     commandId: { type: 'string', minLength: 1, maxLength: 100 }, phaseId: { type: 'string', maxLength: 150 },
     type: { enum: ['Point','Protect','Investigate','SkipAbility','Speak','Nominate','Vote'] },
+    replyTo: { type: ['integer', 'null'], minimum: 1 }, addressedTo: { type: ['string', 'null'], maxLength: 20 },
     targets: { type: 'array', maxItems: 2, items: { type: 'string', maxLength: 20 } }, text: { type: 'string', maxLength: 600 },
   } } },
 }, async request => {
@@ -153,8 +156,13 @@ app.post<{ Params: { id: string }; Body: Command }>('/api/games/:id/actions', {
   if (request.body.type === 'Speak' && !g.receipts[request.body.commandId]) {
     if (Date.now() - (speechTimes.get(g.id) || 0) < 1000) throw new RuleError('Give the table a moment before speaking again.');
   }
-  const draft = commit(g, d => { accept(d, 'p0', request.body, Date.now()); });
-  if (request.body.type === 'Speak') speechTimes.set(g.id, Date.now());
+  let accepted = false;
+  const draft = commit(g, d => { accepted = accept(d, 'p0', request.body, Date.now()); });
+  if (accepted && request.body.type === 'Speak') {
+    speechTimes.set(g.id, Date.now());
+    conversation.published(draft);
+    conversation.cancel(g.id, 'new human speech');
+  }
   return playerView(draft, 'p0');
 });
 app.post<{ Params: { id: string }; Body: { operation: 'pause' | 'resume' | 'leave' } }>('/api/games/:id/control', {
@@ -189,10 +197,10 @@ async function runAI(g: Game, playerId: string, type: Action['type'], taskKey: s
     if (ctrl.signal.aborted || current.status !== 'RUNNING' || current.phaseId !== g.phaseId || Date.now() >= current.deadline) {
       debugLog('GAME · AI RESULT DISCARDED', { ...trace, reason: 'Cancelled, paused, or phase deadline passed.' }); return;
     }
-    commit(current, draft => accept(draft, playerId, { ...action, commandId: randomUUID(), phaseId: g.phaseId }, Date.now()));
+    if (action.type !== type) throw new RuleError('AI returned a different action type.');
+    commit(current, draft => accept(draft, playerId, { ...action, type, commandId: randomUUID(), phaseId: g.phaseId }, Date.now()));
     debugLog('GAME ✓ AI ACTION ACCEPTED', { ...trace, result: action });
     performed.set(taskKey, (performed.get(taskKey) || 0) + 1);
-    if (type === 'Speak') { lastSpeech.set(g.id, Date.now()); lastSpeech.set(`${g.id}:${playerId}`, Date.now()); }
   } catch (error) {
     debugLog('GAME × AI ACTION FAILED', { ...trace, cancelled: ctrl.signal.aborted, error });
     const current = games.get(g.id)!;
@@ -200,27 +208,48 @@ async function runAI(g: Game, playerId: string, type: Action['type'], taskKey: s
     const message = error instanceof RuleError ? 'An AI response was not a legal action. Resume to retry.' :
       error instanceof Error ? error.message : 'The AI request failed.';
     commit(current, d => pause(d, Date.now(), message)); stopRequests(g.id);
-  } finally { clearTimeout(timeout); pending.delete(taskKey); }
+  } finally { clearTimeout(timeout); if (pending.get(taskKey) === ctrl) pending.delete(taskKey); }
 }
+// Speech uses its own reservation lifecycle; other legal actions keep the existing scheduler.
+const conversation = new ConversationController({
+  get: id => games.get(id)!,
+  request: async (state, r) => {
+    const key = `${state.id}:speech:${r.id}`;
+    pending.set(key, r.ctrl);
+    try {
+      let g = games.get(state.id)!;
+      if (g.aiCalls >= 200) throw new Error('This game reached its 200-request limit. Leave the game to start another.');
+      if (!OPENAI_API_KEY) throw new Error('Set OPENAI_API_KEY in .env and restart the server, then resume.');
+      g = commit(g, d => { d.aiCalls++; });
+      const player = g.players.find(p => p.id === r.turn.playerId)!;
+      return await openaiAction(OPENAI_API_KEY, g.model, g.personas[player.personaId], playerView(g, player.id), 'Speak', r.ctrl.signal, fetch, r.id, r.turn) as SpeechResult;
+    } finally { if (pending.get(key) === r.ctrl) pending.delete(key); }
+  },
+  publish: (state, r, result) => {
+    commit(games.get(state.id)!, d => {
+      if (result.type === 'Speak') accept(d, r.turn.playerId, { ...result, type: 'Speak', commandId: r.id, phaseId: r.phaseId }, Date.now());
+      emit(d, 'ConversationOpportunityCompleted', 'Private conversation opportunity completed.', [], r.turn.playerId, { ...r.turn, outcome: result.type });
+    });
+  },
+  fail: (g, message) => { commit(games.get(g.id)!, d => pause(d, Date.now(), message)); stopRequests(g.id); },
+  log: debugLog,
+});
 function schedule(g: Game) {
   const now = Date.now();
-  if (g.status !== 'RUNNING' || now >= g.deadline - 250) return;
-  const speaking = g.phase === 'DISCUSSION' || g.phase.startsWith('DEFENSE');
-  const tasks = living(g).filter(p => !p.human).sort((a, b) =>
-    (lastSpeech.get(`${g.id}:${a.id}`) || 0) - (lastSpeech.get(`${g.id}:${b.id}`) || 0));
-  if (speaking && (now - (lastSpeech.get(g.id) || 0) < 800 ||
-      [...pending.keys()].some(k => k.startsWith(g.id + ':')))) return;
-  for (const p of tasks) {
+  if (g.status !== 'RUNNING' || now >= g.deadline - 250 || pending.size >= 4) return;
+  if (g.phase === 'DISCUSSION' || g.phase.startsWith('DEFENSE')) {
+    void conversation.run(g.id).catch(error => debugLog('CONVERSATION × RUNNER ERROR', { gameId: g.id, error }));
+    return;
+  }
+  for (const p of living(g).filter(p => !p.human)) {
     if (pending.size >= 4) break;
-    const legal = legalActions(g, p.id), type = legal[0]?.type;
+    const type = legalActions(g, p.id)[0]?.type;
     if (!type) continue;
     const taskKey = `${g.id}:${g.phaseId}:${p.id}`;
     if (pending.has(taskKey)) continue;
     const count = performed.get(taskKey) || 0;
-    if ((type === 'Speak' && count >= (g.phase === 'DISCUSSION' ? 2 : 1)) || (type === 'Point' && count >= 2)) continue;
-    if (type === 'Point' && count === 1 && g.deadline - now > g.timing.mafia / 2) continue;
+    if (type === 'Point' && (count >= 2 || (count === 1 && g.deadline - now > g.timing.mafia / 2))) continue;
     void runAI(g, p.id, type, taskKey);
-    if (speaking) break;
   }
 }
 let checkpoint = Date.now();

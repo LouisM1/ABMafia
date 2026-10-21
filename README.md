@@ -39,11 +39,22 @@ All AI decisions and dialogue come from live OpenAI requests. There is no script
 
 API errors pause the game with a message. Correct the key or account issue and resume. Requests have deadlines, a global concurrency limit of four, and a 200-request cap per game. The cap limits requests, not a guaranteed dollar budget. OpenAI charges your account for actual usage.
 
+## Conversation turns
+
+Use **To** beside the input to address a living player. With Table selected, a single unambiguous name routes your message automatically; “Ryan” alone remains addressed to the table. Explicit player selection takes precedence over names in the text.
+
+Only one AI speech request runs per game. Direct questions get priority, with fair opportunities for the rest of the table and a break after two directed replies. Each request sees the latest 40 public speeches (with IDs and names), any older referenced speech, and separately supplied authorized engine facts. Replies normally aim for one or two sentences; the existing 600-character limit remains.
+
+The next request waits 800ms after speech, or four seconds when an AI addresses you. You can interrupt at any time: accepted human speech cancels the pending reply, waits for it to settle, and selects again with fresh context. Pause, phase changes, elimination and deadlines also prevent stale replies from appearing.
+
+An AI can privately pass during discussion and will not be asked again until someone speaks. Completed opportunities are saved with the game; active requests are not restored. An API error or open-phase speech timeout pauses play. These controls improve conversational flow, but cannot guarantee factual or natural dialogue.
+
 ## Structure
 
 | Location | Purpose |
 |---|---|
 | `server/engine.ts` | Authoritative game rules, phases, legal actions, secrets and victory |
+| `server/conversation.ts` | Speaker selection, private passes, turn history, timing and interruption reservations |
 | `server/ai.ts` | OpenAI route and compact rules/persona prompts |
 | `server/personas.ts` | Loads the existing master manifest and enabled runtime traits |
 | `server/storage.ts` | SQLite snapshots and an event journal |
@@ -87,6 +98,7 @@ This builds the latest code, starts the server, and prints live diagnostics in t
 - `OPENAI → REQUEST`: full prompt, persona, authorized game view, action schema and configured model before sending.
 - `OPENAI ← RESPONSE`: full response body, HTTP status, provider request ID, usage when returned, and elapsed milliseconds.
 - `OPENAI × ERROR / CANCELLED`: provider failures, invalid responses and cancellations.
+- `CONVERSATION`: selected speaker and reason, reservation ID, reply reference, public-speech revision, passes, interruptions, discarded results and accepted replies. A reservation ID is also its OpenAI request ID.
 - `GAME`: phase changes, private actions, eliminations and whether an AI action was accepted, discarded or rejected.
 
 The same request ID joins each OpenAI request, response and engine result. Logs are printed only to the terminal; the app does not save log files. Keys and session credentials are redacted, but private roles and match decisions are intentionally visible for debugging.

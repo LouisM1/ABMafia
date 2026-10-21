@@ -1,6 +1,6 @@
 export type Role = 'Mafia' | 'Angel' | 'Sheriff' | 'Townsperson';
 export type Phase = 'MAFIA' | 'ANGEL' | 'SHERIFF' | 'DISCUSSION' | 'NOMINATIONS' | 'DEFENSE_1' | 'DEFENSE_2' | 'VOTE';
-export type Action = { type: 'Point' | 'Protect' | 'Investigate' | 'SkipAbility' | 'Speak' | 'Nominate' | 'Vote'; targets?: string[]; text?: string };
+export type Action = { type: 'Point' | 'Protect' | 'Investigate' | 'SkipAbility' | 'Speak' | 'Nominate' | 'Vote'; targets?: string[]; text?: string; replyTo?: number | null; addressedTo?: string | null };
 export type Command = Action & { commandId: string; phaseId: string };
 export type Player = { id: string; name: string; personaId: string; seat: number; human: boolean; alive: boolean; role: Role };
 export type Event = { seq: number; round: number; phaseId: string; type: string; text: string; actor?: string; audience: 'public' | string[]; data?: unknown };

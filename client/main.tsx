@@ -26,6 +26,7 @@ function App() {
   const [speed, setSpeed] = useState<'standard' | 'quick'>('quick');
   const [targets, setTargets] = useState<string[]>([]);
   const [message, setMessage] = useState('');
+  const [addressedTo, setAddressedTo] = useState('');
   const [now, setNow] = useState(Date.now());
   const [offset, setOffset] = useState(0);
   const [online, setOnline] = useState(true);
@@ -44,7 +45,7 @@ function App() {
     stream.onerror = () => { setOnline(false); reportClient('stream-reconnecting', { gameId: game.id }); };
     return () => stream.close();
   }, [game?.id]);
-  useEffect(() => { setTargets([]); setMessage(''); }, [game?.phaseId]);
+  useEffect(() => { setTargets([]); setMessage(''); setAddressedTo(''); }, [game?.phaseId]);
   useEffect(() => {
     const panel = log.current;
     if (panel) panel.scrollTop = panel.scrollHeight;
@@ -70,9 +71,9 @@ function App() {
       const v = await api<View>(`/games/${game.id}/actions`, {
         commandId: crypto.randomUUID(), phaseId: game.phaseId, type,
         targets: type === 'Speak' || type === 'SkipAbility' ? [] : targets,
-        ...(type === 'Speak' ? { text: message } : {}),
+        ...(type === 'Speak' ? { text: message, addressedTo: addressedTo || null } : {}),
       });
-      receive(v); setTargets([]); setMessage('');
+      receive(v); setTargets([]); setMessage(''); setAddressedTo('');
     });
   }
   const legal = game?.legal[0];
@@ -129,7 +130,7 @@ function App() {
             {game.status === 'FINISHED' ? <><h2>The cards are on the table.</h2><p>Your team {game.winner === (self?.role === 'Mafia' ? 'Mafia' : 'Town') ? 'won' : 'lost'}. Explore the conversation and private events, or start a new game.</p></> :
             game.spectator ? <><h2>You’re watching now.</h2><p>The surviving players continue with only their own information.</p></> :
             game.status === 'PAUSED' ? <><h2>The table is paused.</h2><p>Resume when you’re ready. Submitted actions are preserved.</p></> :
-            legal?.type === 'Speak' ? <><label for="speech">{game.activeSpeaker ? 'Your uninterrupted defense' : 'Speak to the table'}</label><div class="speech-form"><textarea id="speech" value={message} maxLength={600} placeholder="An accusation? A question? Make it count." onInput={e => setMessage(e.currentTarget.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (message.trim() && !busy) void action('Speak'); } }}/><button class="primary" disabled={busy || !message.trim()} onClick={() => void action('Speak')}>Speak ↗</button></div><p class="micro">Enter to send · Shift + Enter for a new line · {message.length}/600</p></> :
+            legal?.type === 'Speak' ? <><label for="speech">{game.activeSpeaker ? 'Your uninterrupted defense' : 'Speak to the table'}</label><label class="speech-recipient">To: <select aria-label="Address your message" value={addressedTo} onChange={e => setAddressedTo(e.currentTarget.value)}><option value="">Table (or name someone)</option>{game.players.filter(p => p.alive && p.id !== game.self).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label><div class="speech-form"><textarea id="speech" value={message} maxLength={600} placeholder="An accusation? A question? Make it count." onInput={e => setMessage(e.currentTarget.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (message.trim() && !busy) void action('Speak'); } }}/><button class="primary" disabled={busy || !message.trim()} onClick={() => void action('Speak')}>Speak ↗</button></div><p class="micro">Enter to send · Shift + Enter for a new line · {message.length}/600</p></> :
             canChoose ? <><h2>{legal.count === 2 ? 'Choose two different players.' : 'Choose a player at the table.'}</h2><p>{legal.type === 'Point' ? 'Only Mafia see the pointers. You can revise until the timer ends.' : legal.type === 'Nominate' ? 'Your nominations are secret and final.' : legal.type === 'Vote' ? 'Your vote is public and final.' : 'Your choice is private and final.'}</p>
               <div class="target-list">{legal.targets.map(id => <button class={targets.includes(id) ? 'target picked' : 'target'} onClick={() => choose(id)}>{game.players.find(p => p.id === id)?.name}</button>)}</div>
               <div class="action-buttons"><button class="primary" disabled={busy || targets.length !== legal.count} onClick={() => void action(legal.type)}>{actionLabel[legal.type]}</button>{game.legal.some(a => a.type === 'SkipAbility') && <button class="subtle" disabled={busy} onClick={() => void action('SkipAbility')}>Skip tonight</button>}</div></> :

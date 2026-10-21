@@ -1,3 +1,4 @@
+import { inferAddressee } from './conversation.js';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { Action, Command, Event, Game, Legal, PersonaPrompt, Phase, Player, Role, Timing, View } from '../shared/types.js';
 
@@ -157,7 +158,7 @@ export function tick(g: Game, now: number, draw = secureDraw) {
   return true;
 }
 export function accept(g: Game, actor: string, c: Command, now: number, draw = secureDraw) {
-  const fingerprint = JSON.stringify({ phaseId: c.phaseId, type: c.type, targets: c.targets || [], text: c.text || '' });
+  const fingerprint = JSON.stringify({ phaseId: c.phaseId, type: c.type, targets: c.targets || [], text: c.text || '', ...(c.replyTo !== undefined ? { replyTo: c.replyTo } : {}), ...(c.addressedTo !== undefined ? { addressedTo: c.addressedTo } : {}) });
   const prior = g.receipts[c.commandId];
   if (prior) { requireRule(prior.actor === actor && prior.fingerprint === fingerprint, 'Command ID was reused.'); return false; }
   requireRule(c.phaseId === g.phaseId, 'That phase has ended.');
@@ -167,6 +168,12 @@ export function accept(g: Game, actor: string, c: Command, now: number, draw = s
   const targets = c.targets || [];
   requireRule(targets.length === legal.count && new Set(targets).size === targets.length && targets.every(id => legal.targets.includes(id)), 'Choose the required number of legal targets.');
   requireRule(c.type === 'Speak' || !c.text, 'This action does not permit speech.');
+  requireRule(c.type === 'Speak' || (c.replyTo === undefined && c.addressedTo === undefined), 'Only speech permits conversation references.');
+  if (c.type === 'Speak') {
+    requireRule(c.replyTo == null || (Number.isSafeInteger(c.replyTo) && g.events.some(e => e.seq === c.replyTo && e.type === 'SpeechPublished' && e.audience === 'public')), 'Reply must reference an existing public speech message.');
+    requireRule(c.addressedTo == null || g.players.some(p => p.id === c.addressedTo && p.alive), 'Address a living player or the table.');
+    requireRule(g.phase === 'DISCUSSION' || g.players.find(p => p.id === actor)!.human || !g.events.some(e => e.phaseId === g.phaseId && e.type === 'SpeechPublished' && e.actor === actor), 'Only one AI defense is allowed.');
+  }
   if (c.type === 'Speak') requireRule(typeof c.text === 'string' && c.text.trim().length > 0 && c.text.length <= 600, 'Speech must be 1–600 characters.');
   const name = g.players.find(p => p.id === actor)!.name;
   switch (c.type) {
@@ -182,7 +189,7 @@ export function accept(g: Game, actor: string, c: Command, now: number, draw = s
       emit(g, 'InvestigationResolved', `${target.name} is ${target.role}.`, [actor], actor, { target: target.id, role: target.role }); break;
     }
     case 'SkipAbility': g.abilityDone = true; emit(g, 'AbilitySkipped', 'You skipped this ability.', [actor], actor); break;
-    case 'Speak': emit(g, 'SpeechPublished', c.text!.trim(), 'public', actor); break;
+    case 'Speak': emit(g, 'SpeechPublished', c.text!.trim(), 'public', actor, { replyTo: c.replyTo ?? null, addressedTo: c.addressedTo ?? (g.players.find(p => p.id === actor)!.human ? inferAddressee(c.text!, g.players) : null) }); break;
     case 'Nominate': g.nominations[actor] = targets; emit(g, 'NominationSubmitted', 'Your nominations are locked in.', [actor], actor, { targets }); break;
     case 'Vote':
       g.votes[actor] = targets[0];
@@ -206,7 +213,7 @@ export function playerView(g: Game, id: string, now = Date.now()): View {
     players: g.players.map(({ role, ...other }) => ({ ...other, ...(
       spectator || other.id === id || (p.role === 'Mafia' && role === 'Mafia') || known[other.id] ? { role } : {}
     ) })),
-    events: g.events.filter(e => spectator || e.audience === 'public' || e.audience.includes(id))
+    events: g.events.filter(e => e.type !== 'ConversationOpportunityCompleted' && (spectator || e.audience === 'public' || e.audience.includes(id)))
       .map(({ audience: _, ...e }) => ({ ...e, audience: 'public' as const })),
     legal: legalActions(g, id), nominees: g.nominees, votes: g.votes, ownNomination: g.nominations[id],
     ...(p.role === 'Mafia' || spectator ? { pointers: g.pointers } : {}),
