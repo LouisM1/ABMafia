@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#17120f" />
+  <title>ABMafia — Lounge demo</title>
+</head>
+<body>
+  <main>
+    <header class="demo-header">
+      <div><div class="eyebrow">ABMAFIA / THE PRIVATE TABLE</div><h1>One less alibi.</h1><p>Click a guest to eliminate them. Their empty chair stays at the table.</p></div>
+      <div class="head-count"><strong id="remaining">12</strong><span>of 12 seated</span></div>
+    </header>
+    <div class="toolbar" aria-label="Scene controls">
+      <div class="presets"><button id="reset" class="primary">Full table</button><button id="half">Six remaining</button><button id="empty">Empty table</button></div>
+      <div class="secondary"><label><input type="checkbox" id="night" /> Night lighting</label><button id="undo" disabled>↶ Undo elimination</button></div>
+    </div>
+    <div class="scene-scroll"><div id="scene" class="scene" role="group" aria-label="Lounge with twelve individually removable guests">
+      <img class="layer room" id="room" alt="" />
+      <div class="floor-shadow" aria-hidden="true"></div>
+      <img class="layer table" id="table" alt="" />
+      <img class="layer chairs" id="chairs" alt="" />
+      <div id="guests"></div>
+      <img class="layer chair-fronts" id="chair-fronts" alt="" />
+      <div class="night-shade" aria-hidden="true"></div>
+    </div></div>
+    <div class="scene-caption"><p id="status" role="status" aria-live="polite">The table is full. Choose your first suspect.</p><span>LOCAL ART DEMO · NO API CALLS</span></div>
+    <section class="guest-panel" aria-labelledby="guest-heading">
+      <div class="roster-heading"><h2 id="guest-heading">At the table</h2><p>Use a guest’s button to remove or restore them.</p></div>
+      <div id="roster" class="roster"></div>
+    </section>
+    <footer>Visual stand-ins, named after your image files. Persona assignments come later.</footer>
+  </main>
+  <script type="module" src="/lounge-demo.ts"></script>
+</body>
+</html>

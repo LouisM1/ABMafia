@@ -11,7 +11,8 @@
     "start": "node build/server/main.js",
     "debug": "npm run build && DEBUG_AI=true node build/server/main.js",
     "dev": "npm run build && tsx watch server/main.ts",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "demo": "vite --host 127.0.0.1 --port 4318 --strictPort --open /lounge-demo.html"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",

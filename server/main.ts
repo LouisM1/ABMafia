@@ -271,12 +271,14 @@ const interval = setInterval(() => {
 // Serve only the build's enumerated files. No arbitrary filesystem path or directory listing.
 const clientRoot = resolve(ROOT, 'build/client');
 const index = readFileSync(resolve(clientRoot, 'index.html'));
+const loungeDemo = readFileSync(resolve(clientRoot, 'lounge-demo.html'));
 const assets = new Map(readdirSync(resolve(clientRoot, 'assets')).map(name => [name, readFileSync(resolve(clientRoot, 'assets', name))]));
 app.get('/', async (_request, reply) => reply.type('text/html').send(index));
+app.get('/lounge-demo.html', async (_request, reply) => reply.type('text/html').send(loungeDemo));
 app.get<{ Params: { name: string } }>('/assets/:name', async (request, reply) => {
   const name = request.params.name, content = assets.get(name);
   if (!content) return reply.code(404).send();
-  const mime = name.endsWith('.js') ? 'application/javascript' : name.endsWith('.css') ? 'text/css' : 'application/octet-stream';
+  const mime = name.endsWith('.js') ? 'application/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.png') ? 'image/png' : 'application/octet-stream';
   return reply.header('Cache-Control', 'public, max-age=31536000, immutable').type(mime).send(content);
 });
 await app.listen({ port: PORT, host: '127.0.0.1' });

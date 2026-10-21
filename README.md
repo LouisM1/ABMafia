@@ -118,3 +118,9 @@ npm run debug
 ```
 
 Rebuild again if you intentionally change Node versions. This does not delete saved games or your `.env` file.
+
+## Lounge art demo
+
+Run `npm run demo` to open **http://127.0.0.1:4318/lounge-demo.html**. This is a browser-only asset demo; it makes no game or OpenAI requests. Click a guest to remove them while leaving the chair in place. The roster can restore individual guests; Full table, Six remaining, Empty table and Undo make it easy to compare compositions. Night lighting previews a darkened scene. On narrow screens, swipe horizontally across the room.
+
+After a normal build, the same demo is available at **http://127.0.0.1:4317/lounge-demo.html** on the game server. The separate entry point is `client/lounge-demo.html`; placement and interactions live in `client/lounge-demo.ts`, styling in `client/lounge-demo.css`. Assets remain unchanged. Character labels describe the image files, not assigned personas. The updated table is displayed in its supplied scene coordinates, and only the aligned foreground portion of `chair-backs.png` is overlaid: its other chair fragments do not match the base chairs. Some sprites also contain chair fragments; these need art cleanup before final game integration.
